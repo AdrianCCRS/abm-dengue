@@ -75,13 +75,12 @@ class MosquitoAgent(Agent):
     
     def __init__(
         self,
-        unique_id: int,
         model,
         etapa: EtapaVida = EtapaVida.ADULTO,
         es_hembra: bool = True,
         sitio_cria: Optional[Tuple[int, int]] = None
     ):
-        super().__init__(unique_id, model)
+        super().__init__(model)
         
         # Estado epidemiológico
         self.estado = EstadoMosquito.SUSCEPTIBLE
@@ -175,7 +174,7 @@ class MosquitoAgent(Agent):
         # 1. Mortalidad diaria (usar parámetro del modelo)
         if self.random.random() < self.tasa_mortalidad:
             self.model.grid.remove_agent(self)
-            self.model.schedule.remove(self)
+            self.model.agents.remove(self)
             return
         
         # 2. Movimiento
@@ -364,7 +363,6 @@ class MosquitoAgent(Agent):
             
             # Crear huevo
             huevo = MosquitoAgent(
-                unique_id=self.model.next_id(),
                 model=self.model,
                 etapa=EtapaVida.HUEVO,
                 es_hembra=es_hembra,
@@ -372,7 +370,7 @@ class MosquitoAgent(Agent):
             )
             
             # No agregar al grid (huevos no ocupan espacio hasta eclosionar)
-            self.model.schedule.add(huevo)
+            self.model.agents.add(huevo)
         
         # Resetear estado reproductivo
         self.ha_picado_hoy = False
@@ -405,16 +403,43 @@ class MosquitoAgent(Agent):
     
     def _buscar_sitio_cria(self) -> Optional[Tuple[int, int]]:
         """
-        Busca sitio de cría activo cercano.
+        Busca sitio de cría activo cercano (celdas tipo AGUA).
+        
+        Busca dentro del rango máximo de vuelo del mosquito (Fr).
         
         Returns
         -------
         Optional[Tuple[int, int]]
-            Coordenadas del sitio de cría o None
+            Coordenadas del sitio de cría más cercano o None
         """
-        # TODO: Implementar búsqueda de celdas con sitios de cría activos
-        # Por ahora retorna la posición actual (simplificación)
-        return self.pos
+        from ..model.celda import TipoCelda
+        
+        # Sitios permanentes (celdas tipo AGUA)
+        sitios_agua = [pos for pos, celda in self.model.mapa_celdas.items()
+                       if celda.tipo == TipoCelda.AGUA]
+        
+        # Sitios temporales (charcos post-lluvia) - si existen
+        sitios_temp = []
+        if hasattr(self.model, 'sitios_cria_temporales'):
+            sitios_temp = list(self.model.sitios_cria_temporales.keys())
+        
+        # Combinar todos los sitios disponibles
+        sitios_disponibles = sitios_agua + sitios_temp
+        
+        if not sitios_disponibles:
+            return None
+        
+        # Filtrar por rango de vuelo máximo (Fr = ~350m)
+        rango_max = getattr(self.model, 'rango_vuelo_max', 10)  # 10 celdas por defecto
+        sitios_alcanzables = [s for s in sitios_disponibles 
+                              if self._distancia(s) <= rango_max]
+        
+        if not sitios_alcanzables:
+            # Si ninguno alcanzable, retornar el más cercano aunque esté lejos
+            return min(sitios_disponibles, key=lambda s: self._distancia(s))
+        
+        # Retornar el más cercano dentro del rango
+        return min(sitios_alcanzables, key=lambda s: self._distancia(s))
     
     def _distancia(self, pos: Tuple[int, int]) -> float:
         """
