@@ -83,6 +83,38 @@ climate:
   temperature_effect_on_breeding: true
   rain_effect_on_breeding: true
 
+# Entorno (Estructura Espacial)
+environment:
+  # Distribución de tipos de celdas (deben considerar el total del grid)
+  cell_types:
+    water_ratio: 0.05      # 5% celdas tipo AGUA (criaderos permanentes: lagos, estanques)
+    park_ratio: 0.10       # 10% celdas tipo PARQUE (zonas recreativas, alta exposición)
+    urban_ratio: 0.85      # 85% celdas tipo URBANA (viviendas, oficinas, escuelas)
+  
+  # Tamaño de zonas (clusters contiguos)
+  zone_sizes:
+    water_min: 2           # Tamaño mínimo de cuerpo de agua (2x2 celdas)
+    water_max: 4           # Tamaño máximo de cuerpo de agua (4x4 celdas)
+    park_min: 3            # Tamaño mínimo de parque (3x3 celdas)
+    park_max: 6            # Tamaño máximo de parque (6x6 celdas)
+  
+  # Parámetros de vuelo de mosquitos
+  mosquito_flight:
+    max_range: 10          # celdas máximas de vuelo (~350m si celda=35m)
+
+# Comportamiento Humano
+human_behavior:
+  # Aislamiento de infectados (Extensión 2)
+  isolation_probability: 0.7           # 70% de infectados se aíslan voluntariamente
+  infected_mobility_radius: 1          # radio de movilidad (celdas) si NO se aísla
+  
+  # Opcional: diferenciar por tipo (descomentar para usar)
+  # isolation_by_type:
+  #   student: 0.8       # estudiantes más propensos a aislarse
+  #   worker: 0.6        # trabajadores menos (necesidad económica)
+  #   mobile: 0.5        # móviles difícilmente se aíslan
+  #   stationary: 0.9    # estacionarios ya están en casa
+
 # Estrategias de Control
 control_strategies:
   # Gestión de Fuentes Larvarias (LSM)
