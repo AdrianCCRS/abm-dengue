@@ -11,7 +11,7 @@ Universidad Industrial de Santander - Simulación Digital F1
 """
 
 from mesa import Model
-from mesa.time import RandomActivation
+#from mesa.time import RandomActivation
 from mesa.space import MultiGrid
 from mesa.datacollection import DataCollector
 import numpy as np
@@ -23,6 +23,7 @@ from ..agents import (
     HumanAgent, MosquitoAgent,
     EstadoSalud, EstadoMosquito, TipoMovilidad, EtapaVida
 )
+from .celda import Celda, TipoCelda
 
 
 class DengueModel(Model):
@@ -118,8 +119,11 @@ class DengueModel(Model):
         self.grid = MultiGrid(width, height, torus=False)
         
         # Scheduler de activación aleatoria
-        self.schedule = RandomActivation(self)
+        #self.schedule = RandomActivation(self)
         
+        # Contador de steps propio (reemplaza schedule.steps en Mesa 2.1)
+        self.steps = 0
+
         # Variables climáticas
         self.fecha_inicio = fecha_inicio
         self.fecha_actual = fecha_inicio
@@ -133,7 +137,10 @@ class DengueModel(Model):
         self.lsm_activo = False
         self.itn_irs_activo = False
         
-        # Sitios de cría (desde configuración)
+        # Mapa de celdas con tipos (urbana, parque, agua)
+        self.mapa_celdas = self._inicializar_mapa_celdas()
+        
+        # Sitios de cría (desde mapa de celdas)
         self.sitios_cria = self._generar_sitios_cria()
         
         # Contador de IDs único
@@ -235,6 +242,28 @@ class DengueModel(Model):
         self.dist_trabajadores = mobility_dist.get('worker', 0.35)
         self.dist_moviles = mobility_dist.get('mobile', 0.25)
         self.dist_estacionarios = mobility_dist.get('stationary', 0.15)
+        
+        # Parámetros del entorno (tipos de celdas)
+        environment = config.get('environment', {})
+        cell_types = environment.get('cell_types', {})
+        self.proporcion_celdas_agua = cell_types.get('water_ratio', 0.05)
+        self.proporcion_celdas_parques = cell_types.get('park_ratio', 0.10)
+        
+        # Tamaños de zonas
+        zone_sizes = environment.get('zone_sizes', {})
+        self.agua_min = zone_sizes.get('water_min', 2)
+        self.agua_max = zone_sizes.get('water_max', 4)
+        self.parque_min = zone_sizes.get('park_min', 3)
+        self.parque_max = zone_sizes.get('park_max', 6)
+        
+        # Parámetros de vuelo de mosquitos
+        mosquito_flight = environment.get('mosquito_flight', {})
+        self.rango_vuelo_max = mosquito_flight.get('max_range', 10)
+        
+        # Parámetros de comportamiento humano
+        human_behavior = config.get('human_behavior', {})
+        self.prob_aislamiento = human_behavior.get('isolation_probability', 0.7)
+        self.radio_mov_infectado = human_behavior.get('infected_mobility_radius', 1)
     
     def _cargar_configuracion_default(self):
         """Carga configuración por defecto si no se proporciona config."""
@@ -288,6 +317,23 @@ class DengueModel(Model):
         self.dist_trabajadores = 0.35
         self.dist_moviles = 0.25
         self.dist_estacionarios = 0.15
+        
+        # Parámetros del entorno (tipos de celdas)
+        self.proporcion_celdas_agua = 0.05  # 5% agua
+        self.proporcion_celdas_parques = 0.10  # 10% parques
+        
+        # Tamaños de zonas
+        self.agua_min = 2
+        self.agua_max = 4
+        self.parque_min = 3
+        self.parque_max = 6
+        
+        # Parámetros de vuelo de mosquitos
+        self.rango_vuelo_max = 10  # ~350m si celda=35m
+        
+        # Parámetros de comportamiento humano
+        self.prob_aislamiento = 0.7  # 70% se aíslan
+        self.radio_mov_infectado = 1  # 1 celda de radio
     
     def step(self):
         """
@@ -306,6 +352,7 @@ class DengueModel(Model):
         10. Recolectar métricas
         """
         self.dia_simulacion += 1
+        self.steps += 1  # Incrementar contador de steps
         self.fecha_actual = self.fecha_inicio + timedelta(days=self.dia_simulacion)
         
         # 1. Actualizar clima
@@ -315,7 +362,7 @@ class DengueModel(Model):
         self._aplicar_control()
         
         # 3. Activar todos los agentes (actualiza estados, movimiento, interacciones)
-        self.schedule.step()
+        self.agents.shuffle_do("step")
         
         # 4. Recolectar datos
         self.datacollector.collect(self)
@@ -435,14 +482,14 @@ class DengueModel(Model):
         self.lsm_activo = True
         
         # Obtener todos los huevos
-        huevos = [a for a in self.schedule.agents 
+        huevos = [a for a in self.agents 
                  if isinstance(a, MosquitoAgent) and a.etapa == EtapaVida.HUEVO]
         
         # Aplicar reducción: 70% cobertura × 80% efectividad = 56% reducción
         reduccion = 0.56
         for huevo in huevos:
             if self.random.random() < reduccion:
-                self.schedule.remove(huevo)
+                self.agents.remove(huevo)
     
     def _aplicar_itn_irs(self):
         """
@@ -454,25 +501,152 @@ class DengueModel(Model):
         self.itn_irs_activo = True
         # La lógica de reducción se implementa en MosquitoAgent.intentar_picar()
     
+    def _inicializar_mapa_celdas(self) -> Dict[Tuple[int, int], 'Celda']:
+        """
+        Crea mapa de celdas con tipos asignados.
+        
+        Distribución desde configuración (por defecto):
+        - 5% agua (criaderos permanentes como zonas)
+        - 10% parques (zonas recreativas contiguas)
+        - 85% urbana (viviendas, oficinas, escuelas)
+        
+        Los parques y cuerpos de agua se crean como ZONAS contiguas (clusters),
+        no como celdas aisladas, para mayor realismo.
+        
+        Returns
+        -------
+        Dict[Tuple[int, int], Celda]
+            Diccionario mapeando coordenadas a objetos Celda
+        """
+        from .celda import Celda, TipoCelda
+        
+        mapa = {}
+        
+        # Inicializar todo como urbano
+        for x in range(self.width):
+            for y in range(self.height):
+                mapa[(x, y)] = Celda(TipoCelda.URBANA, (x, y))
+        
+        # Obtener proporciones desde configuración
+        prop_agua = getattr(self, 'proporcion_celdas_agua', 0.05)
+        prop_parques = getattr(self, 'proporcion_celdas_parques', 0.10)
+        
+        # Calcular cantidades totales
+        total_celdas = self.width * self.height
+        num_agua = int(total_celdas * prop_agua)
+        num_parques = int(total_celdas * prop_parques)
+        
+        # Crear zonas de agua (clusters)
+        celdas_ocupadas = set()
+        self._crear_zonas_tipo(mapa, TipoCelda.AGUA, num_agua, celdas_ocupadas)
+        
+        # Crear zonas de parques (clusters)
+        self._crear_zonas_tipo(mapa, TipoCelda.PARQUE, num_parques, celdas_ocupadas)
+        
+        return mapa
+    
+    def _crear_zonas_tipo(
+        self,
+        mapa: Dict[Tuple[int, int], 'Celda'],
+        tipo: 'TipoCelda',
+        num_celdas_objetivo: int,
+        celdas_ocupadas: set
+    ):
+        """
+        Crea zonas contiguas (clusters) de un tipo específico.
+        
+        Algoritmo:
+        1. Elegir centro aleatorio disponible
+        2. Expandir en forma de cuadrado/rectángulo
+        3. Repetir hasta alcanzar num_celdas_objetivo
+        
+        Parameters
+        ----------
+        mapa : Dict[Tuple[int, int], Celda]
+            Mapa de celdas a modificar
+        tipo : TipoCelda
+            Tipo de celda a crear (AGUA o PARQUE)
+        num_celdas_objetivo : int
+            Número total de celdas a asignar a este tipo
+        celdas_ocupadas : set
+            Set de posiciones ya ocupadas por otros tipos
+        """
+        from .celda import Celda
+        
+        celdas_asignadas = 0
+        
+        # Tamaño de zonas según tipo (desde configuración)
+        if tipo.value == "agua":
+            tamaño_min = getattr(self, 'agua_min', 2)
+            tamaño_max = getattr(self, 'agua_max', 4)
+        else:  # parques
+            tamaño_min = getattr(self, 'parque_min', 3)
+            tamaño_max = getattr(self, 'parque_max', 6)
+        
+        intentos = 0
+        max_intentos = 1000
+        
+        while celdas_asignadas < num_celdas_objetivo and intentos < max_intentos:
+            intentos += 1
+            
+            # Elegir centro aleatorio
+            centro_x = self.random.randint(1, self.width - tamaño_max - 1)
+            centro_y = self.random.randint(1, self.height - tamaño_max - 1)
+            
+            # Verificar si centro está disponible
+            if (centro_x, centro_y) in celdas_ocupadas:
+                continue
+            
+            # Determinar tamaño de esta zona
+            ancho = self.random.randint(tamaño_min, tamaño_max)
+            alto = self.random.randint(tamaño_min, tamaño_max)
+            
+            # Verificar si toda la zona está disponible
+            zona_disponible = True
+            celdas_zona = []
+            
+            for dx in range(ancho):
+                for dy in range(alto):
+                    x = centro_x + dx
+                    y = centro_y + dy
+                    
+                    if x >= self.width or y >= self.height:
+                        zona_disponible = False
+                        break
+                    
+                    if (x, y) in celdas_ocupadas:
+                        zona_disponible = False
+                        break
+                    
+                    celdas_zona.append((x, y))
+                
+                if not zona_disponible:
+                    break
+            
+            # Si la zona está disponible, asignarla
+            if zona_disponible and celdas_zona:
+                for pos in celdas_zona:
+                    mapa[pos] = Celda(tipo, pos)
+                    celdas_ocupadas.add(pos)
+                    celdas_asignadas += 1
+                    
+                    if celdas_asignadas >= num_celdas_objetivo:
+                        break
+    
     def _generar_sitios_cria(self) -> List[Tuple[int, int]]:
         """
-        Genera ubicaciones de sitios de cría de mosquitos.
+        Genera ubicaciones de sitios de cría de mosquitos desde mapa de celdas.
         
-        Distribución: proporcion_sitios_cria de celdas del grid (por defecto 20%).
+        Extrae las celdas tipo AGUA como criaderos permanentes.
         
         Returns
         -------
         List[Tuple[int, int]]
-            Lista de coordenadas de sitios de cría
+            Lista de coordenadas de sitios de cría permanentes
         """
-        proporcion = getattr(self, 'proporcion_sitios_cria', 0.2)
-        num_sitios = int(self.width * self.height * proporcion)
-        sitios = []
-        
-        for _ in range(num_sitios):
-            x = self.random.randrange(self.width)
-            y = self.random.randrange(self.height)
-            sitios.append((x, y))
+        # Extraer celdas tipo AGUA del mapa
+        sitios = [pos for pos, celda in self.mapa_celdas.items() 
+                 if celda.tipo == TipoCelda.AGUA]
         
         return sitios
     
@@ -526,7 +700,6 @@ class DengueModel(Model):
             
             # Crear agente
             humano = HumanAgent(
-                unique_id=self.next_id(),
                 model=self,
                 tipo_movilidad=tipo,
                 pos_hogar=pos_hogar,
@@ -540,7 +713,7 @@ class DengueModel(Model):
             
             # Colocar en grid y agregar a scheduler
             self.grid.place_agent(humano, pos_hogar)
-            self.schedule.add(humano)
+            self.agents.add(humano)
     
     def _crear_mosquitos(self, num_mosquitos: int, infectados_iniciales: int):
         """
@@ -568,7 +741,6 @@ class DengueModel(Model):
             
             # Crear agente
             mosquito = MosquitoAgent(
-                unique_id=self.next_id(),
                 model=self,
                 etapa=EtapaVida.ADULTO,
                 es_hembra=es_hembra
@@ -581,7 +753,7 @@ class DengueModel(Model):
             
             # Colocar en grid y agregar a scheduler
             self.grid.place_agent(mosquito, pos)
-            self.schedule.add(mosquito)
+            self.agents.add(mosquito)
     
     def _crear_huevos(self, num_huevos: int):
         """
@@ -607,7 +779,6 @@ class DengueModel(Model):
             
             # Crear huevo
             huevo = MosquitoAgent(
-                unique_id=self.next_id(),
                 model=self,
                 etapa=EtapaVida.HUEVO,
                 es_hembra=es_hembra,
@@ -615,7 +786,7 @@ class DengueModel(Model):
             )
             
             # Agregar a scheduler (no al grid hasta eclosionar)
-            self.schedule.add(huevo)
+            self.agents.add(huevo)
     
     def next_id(self) -> int:
         """
@@ -632,24 +803,24 @@ class DengueModel(Model):
     
     def _contar_humanos_estado(self, estado: EstadoSalud) -> int:
         """Cuenta humanos en un estado epidemiológico específico."""
-        return sum(1 for a in self.schedule.agents 
+        return sum(1 for a in self.agents 
                   if isinstance(a, HumanAgent) and a.estado == estado)
     
     def _contar_mosquitos_estado(self, estado: EstadoMosquito) -> int:
         """Cuenta mosquitos adultos en un estado epidemiológico específico."""
-        return sum(1 for a in self.schedule.agents 
+        return sum(1 for a in self.agents 
                   if isinstance(a, MosquitoAgent) 
                   and a.etapa == EtapaVida.ADULTO 
                   and a.estado == estado)
     
     def _contar_mosquitos_adultos(self) -> int:
         """Cuenta total de mosquitos adultos."""
-        return sum(1 for a in self.schedule.agents 
+        return sum(1 for a in self.agents 
                   if isinstance(a, MosquitoAgent) and a.etapa == EtapaVida.ADULTO)
     
     def _contar_huevos(self) -> int:
         """Cuenta total de huevos."""
-        return sum(1 for a in self.schedule.agents 
+        return sum(1 for a in self.agents 
                   if isinstance(a, MosquitoAgent) and a.etapa == EtapaVida.HUEVO)
     
     def __repr__(self) -> str:
