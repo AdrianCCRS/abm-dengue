@@ -1,0 +1,157 @@
+# Configuración de la Simulación ABM-Dengue Bucaramanga
+
+# Parámetros del Modelo
+model:
+  grid_width: 50
+  grid_height: 50
+  simulation_days: 180
+  seed: 42
+
+# Población
+population:
+  num_humans: 1000
+  num_mosquitoes_adult: 2000    # mosquitos adultos iniciales
+  num_mosquitoes_eggs: 500      # huevos iniciales
+  initial_infected_humans: 10
+  initial_infected_mosquitoes: 5
+  
+  # Distribución de tipos de movilidad humana (deben sumar 1.0)
+  mobility_distribution:
+    student: 0.25        # 25% estudiantes (Tipo 1)
+    worker: 0.35         # 35% trabajadores (Tipo 2)
+    mobile: 0.25         # 25% móviles continuos (Tipo 3)
+    stationary: 0.15     # 15% estacionarios (Tipo 4)
+
+# Parámetros SEIR (Humanos)
+human_disease:
+  incubation_period: 5.0       # días (Ne - período de incubación, E→I)
+  infectious_period: 6.0       # días (Ni - período infeccioso, I→R)
+  recovery_rate: 0.167         # 1/infectious_period
+  mortality_rate: 0.001        # tasa de mortalidad por dengue
+  immunity_loss_rate: 0.0      # Prc = 0 (inmunidad permanente en este modelo)
+
+# Parámetros SI (Mosquitos)
+mosquito_disease:
+  incubation_period: 10.0      # días de incubación extrínseca (no usado en modelo SI simple)
+  mortality_rate: 0.05         # Mr = 0.05 por día (tasa de mortalidad diaria)
+  lifespan_mean: 20.0          # días (vida promedio, 1/mortality_rate)
+  lifespan_std: 5.0            # desviación estándar
+  sensory_range: 3             # Sr = 3 celdas (rango de detección de humanos)
+  
+# Transmisión
+transmission:
+  mosquito_to_human_prob: 0.6   # α = 0.6 (probabilidad de transmisión M→H)
+  human_to_mosquito_prob: 0.275 # β = 0.275 (probabilidad de transmisión H→M)
+  biting_rate: 1.0              # picaduras por mosquito hembra por día
+  contact_radius: 1             # radio de contacto en celdas (misma celda = 0)
+
+# Movilidad Humana
+mobility:
+  move_probability: 0.3         # probabilidad de moverse diariamente
+  work_probability: 0.7         # probabilidad de ir al trabajo
+  
+  # Probabilidades de visita a parque según tipo de agente
+  park_probability_student: 0.3      # estudiantes tienen mayor tendencia a ir a parques
+  park_probability_worker: 0.1       # trabajadores visitan menos los parques
+  park_probability_mobile: 0.15      # móviles continuos probabilidad intermedia
+  park_probability_stationary: 0.05  # estacionarios rara vez salen
+  
+  # Horarios de actividad (horas del día)
+  school_start_hour: 7          # hora de entrada a escuela
+  school_end_hour: 15           # hora de salida de escuela (3 PM)
+  work_start_hour: 7            # hora de entrada al trabajo
+  work_end_hour: 17             # hora de salida del trabajo (5 PM)
+  park_start_hour: 16           # ventana de visita a parque inicio (4 PM)
+  park_end_hour: 19             # ventana de visita a parque fin (7 PM)
+  
+  # Movilidad continua (Tipo 3)
+  mobile_move_interval_hours: 2      # cada cuántas horas cambia de ubicación
+  mobile_active_start_hour: 7        # hora inicio de movilidad activa
+  mobile_active_end_hour: 19         # hora fin de movilidad activa (7 PM)
+  
+  home_return_probability: 0.9  # probabilidad de regresar a casa
+
+# Clima (valores por defecto si no hay API)
+climate:
+  use_api: true
+  api_name: "meteostat"
+  location:
+    latitude: 7.1193
+    longitude: -73.1227
+  default_temperature: 24.0  # °C
+  default_precipitation: 3.0 # mm
+  temperature_effect_on_breeding: true
+  rain_effect_on_breeding: true
+
+# Estrategias de Control
+control_strategies:
+  # Gestión de Fuentes Larvarias (LSM)
+  lsm:
+    enabled: false
+    start_day: 30
+    coverage: 0.7            # 70% de cobertura
+    effectiveness: 0.8       # 80% de reducción de criaderos
+    frequency_days: 7        # cada 7 días
+  
+  # Mosquiteros e Insecticidas (ITN/IRS)
+  itn_irs:
+    enabled: false
+    start_day: 30
+    coverage: 0.6            # 60% de hogares protegidos
+    bite_reduction: 0.7      # 70% de reducción de picaduras
+    duration_days: 90        # duración del efecto
+
+# Reproducción de Mosquitos
+mosquito_breeding:
+  eggs_per_female: 100          # huevos por puesta por hembra
+  mating_probability: 0.6       # Pm = 0.6 (probabilidad de apareamiento exitoso)
+  female_ratio: 0.5             # Pf = 0.5 (proporción de hembras)
+  
+  # Desarrollo dependiente de temperatura (fórmulas del paper)
+  # Días de maduración del huevo: τ = 3 + |θ - 21| / 5
+  egg_maturation_base_days: 3
+  egg_maturation_temp_optimal: 21.0
+  egg_maturation_temp_sensitivity: 5.0
+  
+  # Días de desarrollo huevo-adulto: μ = 8 + |θ - 25|
+  egg_to_adult_base_days: 8
+  egg_to_adult_temp_optimal: 25.0
+  egg_to_adult_temp_sensitivity: 1.0
+  
+  # Límites de temperatura para supervivencia
+  temperature_min: 15.0         # °C mínima para desarrollo
+  temperature_opt: 28.0         # °C óptima
+  temperature_max: 35.0         # °C máxima
+  
+  # Precipitación y sitios de cría
+  rainfall_threshold: 0.0       # mm mínimos para activar criaderos (0 = siempre activos)
+  breeding_site_ratio: 0.2      # 20% de celdas tienen sitios de cría potenciales
+
+# Recolección de Datos
+data_collection:
+  collect_every_step: true
+  metrics:
+    - susceptible_humans
+    - exposed_humans
+    - infected_humans
+    - recovered_humans
+    - susceptible_mosquitoes
+    - infected_mosquitoes
+    - total_mosquitoes
+    - daily_temperature
+    - daily_precipitation
+    - new_infections_humans
+    - new_infections_mosquitoes
+
+# Visualización
+visualization:
+  enable_live_view: false
+  save_plots: true
+  plot_interval: 10  # guardar cada 10 pasos
+  
+# Salida
+output:
+  results_dir: "results"
+  plots_dir: "results/plots"
+  save_format: "csv"
+  experiment_name: "baseline"
