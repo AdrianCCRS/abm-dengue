@@ -68,17 +68,20 @@ class HumanAgent(Agent):
         Posición actual en la cuadrícula
     num_picaduras : int
         Número de picaduras recibidas (para métricas)
+    prob_aislamiento : float
+        Probabilidad de aislamiento del agente,
+    en_aislamiento : bool
+        Indica si el agente está en aislamiento debido a infección
     """
     
     def __init__(
         self,
-        unique_id: int,
         model,
         tipo_movilidad: TipoMovilidad,
         pos_hogar: Tuple[int, int],
         pos_destino: Optional[Tuple[int, int]] = None
     ):
-        super().__init__(unique_id, model)
+        super().__init__(model)
         
         # Estado epidemiológico
         self.estado = EstadoSalud.SUSCEPTIBLE
@@ -89,6 +92,8 @@ class HumanAgent(Agent):
         self.pos_hogar = pos_hogar
         self.pos_destino = pos_destino  # Escuela/oficina
         self.pos_actual = pos_hogar
+        self.prob_aislamiento = getattr(model, 'prob_aislamiento', 0.7)  # 70% por defecto
+        self.en_aislamiento = False
         
         # Métricas
         self.num_picaduras = 0
@@ -140,6 +145,9 @@ class HumanAgent(Agent):
             if self.dias_en_estado >= self.duracion_infectado:
                 self.estado = EstadoSalud.RECUPERADO
                 self.dias_en_estado = 0
+                # Resetear flag de aislamiento para futuras reinfecciones
+                if hasattr(self, '_aislamiento_decidido'):
+                    self._aislamiento_decidido = False
     
     def get_exposed(self):
         """
@@ -185,15 +193,36 @@ class HumanAgent(Agent):
         - Tipo 3 (Móvil continuo): Cambia ubicación cada 2 horas
         - Tipo 4 (Estacionario): Permanece en hogar
         
-        NOTA: Los infectados (estado I) permanecen en casa.
+        NOTA: Los infectados (estado I) tienen comportamiento especial:
+        - Con prob_aislamiento: permanecen en casa (aislamiento completo)
+        - Sin aislamiento: movilidad reducida (radio limitado)
         """
-        # Los infectados no se mueven (permanecen en casa)
+        # Infectados: decisión de aislamiento
         if self.estado == EstadoSalud.INFECTADO:
-            self.mover_a(self.pos_hogar)
-            return
+            # Decidir aislamiento al momento de infectarse (una sola vez)
+            if not hasattr(self, '_aislamiento_decidido'):
+                self.en_aislamiento = (self.random.random() < self.prob_aislamiento)
+                self._aislamiento_decidido = True
+            
+            if self.en_aislamiento:
+                # Aislamiento completo: permanece en casa
+                self.mover_a(self.pos_hogar)
+                return
+            else:
+                # Sin aislamiento: movilidad reducida (solo celdas vecinas al hogar)
+                radio_mov = getattr(self.model, 'radio_mov_infectado', 1)
+                vecindad = self.model.grid.get_neighborhood(
+                    self.pos_hogar,
+                    moore=True,
+                    include_center=True,
+                    radius=radio_mov
+                )
+                nueva_pos = self.random.choice(vecindad)
+                self.mover_a(nueva_pos)
+                return
         
-        # Obtener hora simulada (simplificado: usar paso del modelo)
-        hora_del_dia = self.model.schedule.steps % 24 if hasattr(self.model, 'schedule') else 12
+        # Obtener hora simulada (simplificado: usar contador de steps del modelo)
+        hora_del_dia = self.model.steps % 24
         
         if self.tipo == TipoMovilidad.ESTUDIANTE:
             self._movilidad_estudiante(hora_del_dia)
@@ -284,11 +313,37 @@ class HumanAgent(Agent):
         Returns
         -------
         Optional[Tuple[int, int]]
-            Coordenadas del parque o None si no hay parques
+            Coordenadas del parque más cercano o None si no hay parques
         """
-        # TODO: Implementar búsqueda de celdas tipo "parque"
-        # Por ahora retorna None (se implementará con el modelo completo)
-        return None
+        from ..model.celda import TipoCelda
+        
+        # Filtrar celdas tipo parque
+        parques = [pos for pos, celda in self.model.mapa_celdas.items() 
+                   if celda.tipo == TipoCelda.PARQUE]
+        
+        if not parques:
+            return None
+        
+        # Retornar el más cercano a la posición actual
+        return min(parques, key=lambda p: self._distancia_manhattan(p))
+    
+    def _distancia_manhattan(self, pos: Tuple[int, int]) -> int:
+        """
+        Calcula distancia Manhattan entre posición actual y destino.
+        
+        Parameters
+        ----------
+        pos : Tuple[int, int]
+            Posición destino
+            
+        Returns
+        -------
+        int
+            Distancia Manhattan (suma de diferencias absolutas)
+        """
+        x1, y1 = self.pos
+        x2, y2 = pos
+        return abs(x2 - x1) + abs(y2 - y1)
     
     def _obtener_posicion_aleatoria(self) -> Tuple[int, int]:
         """
