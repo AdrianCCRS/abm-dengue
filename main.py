@@ -50,11 +50,11 @@ def ejecutar_simulacion(
     steps: int = 365,
     width: int = 50,
     height: int = 50,
-    num_humanos: int = 1000,
-    num_mosquitos: int = 2000,
-    num_huevos: int = 500,
-    infectados_iniciales: int = 10,
-    mosquitos_infectados_iniciales: int = 5,
+    num_humanos: int = 100,
+    num_mosquitos: int = 200,
+    num_huevos: int = 50,
+    infectados_iniciales: int = 5,
+    mosquitos_infectados_iniciales: int = 2,
     usar_lsm: bool = False,
     usar_itn_irs: bool = False,
     seed: int = None,
@@ -130,18 +130,27 @@ def ejecutar_simulacion(
     for i in range(steps):
         modelo.step()
         
-        # Mostrar progreso cada 30 días
-        if verbose and (i + 1) % 30 == 0:
+        # Mostrar progreso cada 10 días (más frecuente para ver avance)
+        if verbose and (i + 1) % 10 == 0:
             infectados = modelo._contar_humanos_estado(EstadoSalud.INFECTADO)
-            mosquitos = modelo._contar_mosquitos_adultos()
-            print(f"📅 Día {i+1:3d}: {infectados:3d} infectados | "
-                  f"{mosquitos:4d} mosquitos | "
-                  f"Temp: {modelo.temperatura_actual:.1f}°C | "
-                  f"Lluvia: {modelo.precipitacion_actual:.1f}mm")
+            expuestos = modelo._contar_humanos_estado(EstadoSalud.EXPUESTO)
+            recuperados = modelo._contar_humanos_estado(EstadoSalud.RECUPERADO)
+            mosquitos_adultos = modelo._contar_mosquitos_adultos()
+            mosquitos_inf = modelo._contar_mosquitos_estado(EstadoMosquito.INFECTADO)
+            huevos = modelo._contar_huevos()
+            
+            print(f"📅 Día {i+1:3d}: "
+                  f"👥 S:{modelo._contar_humanos_estado(EstadoSalud.SUSCEPTIBLE):3d} "
+                  f"E:{expuestos:2d} I:{infectados:2d} R:{recuperados:3d} | "
+                  f"🦟 Adultos:{mosquitos_adultos:3d} (Inf:{mosquitos_inf:2d}) "
+                  f"Huevos:{huevos:3d} | "
+                  f"🌡️ {modelo.temperatura_actual:.1f}°C "
+                  f"🌧️ {modelo.precipitacion_actual:.1f}mm")
     
     if verbose:
-        print("\n✅ Simulación completada!")
-        print("=" * 70)
+        print("\n" + "="*70)
+        print("✅ Simulación completada!")
+        print("="*70)
     
     return modelo
 
@@ -282,9 +291,10 @@ def main():
     # Argumentos de línea de comandos
     parser.add_argument('--config', type=str, help='Archivo de configuración YAML')
     parser.add_argument('--steps', type=int, default=365, help='Días a simular')
-    parser.add_argument('--humanos', type=int, default=1000, help='Número de humanos')
-    parser.add_argument('--mosquitos', type=int, default=2000, help='Número de mosquitos')
-    parser.add_argument('--infectados', type=int, default=10, help='Infectados iniciales')
+    parser.add_argument('--humanos', type=int, default=100, help='Número de humanos')
+    parser.add_argument('--mosquitos', type=int, default=200, help='Número de mosquitos')
+    parser.add_argument('--huevos', type=int, default=50, help='Número de huevos iniciales')
+    parser.add_argument('--infectados', type=int, default=5, help='Infectados iniciales')
     parser.add_argument('--lsm', action='store_true', help='Activar control LSM')
     parser.add_argument('--itn-irs', action='store_true', help='Activar control ITN/IRS')
     parser.add_argument('--seed', type=int, help='Semilla para reproducibilidad')
@@ -299,8 +309,9 @@ def main():
         # Sobrescribir con argumentos CLI si se proporcionan
         parametros = {
             'steps': args.steps if args.steps != 365 else config.get('simulacion', {}).get('duracion_dias', 365),
-            'num_humanos': args.humanos if args.humanos != 1000 else config.get('poblacion', {}).get('humanos', 1000),
-            'num_mosquitos': args.mosquitos if args.mosquitos != 2000 else config.get('poblacion', {}).get('mosquitos_adultos', 2000),
+            'num_humanos': args.humanos if args.humanos != 100 else config.get('poblacion', {}).get('humanos', 100),
+            'num_mosquitos': args.mosquitos if args.mosquitos != 200 else config.get('poblacion', {}).get('mosquitos_adultos', 200),
+            'num_huevos': args.huevos if args.huevos != 50 else config.get('poblacion', {}).get('huevos', 50),
             'infectados_iniciales': args.infectados,
             'usar_lsm': args.lsm or config.get('control', {}).get('lsm', {}).get('activado', False),
             'usar_itn_irs': args.itn_irs or config.get('control', {}).get('itn_irs', {}).get('activado', False),
@@ -311,6 +322,7 @@ def main():
             'steps': args.steps,
             'num_humanos': args.humanos,
             'num_mosquitos': args.mosquitos,
+            'num_huevos': args.huevos,
             'infectados_iniciales': args.infectados,
             'usar_lsm': args.lsm,
             'usar_itn_irs': args.itn_irs,
