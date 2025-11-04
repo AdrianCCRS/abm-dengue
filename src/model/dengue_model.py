@@ -362,7 +362,7 @@ class DengueModel(Model):
         self._aplicar_control()
         
         # 3. Activar todos los agentes (actualiza estados, movimiento, interacciones)
-        self.agents.shuffle_do("step")
+        self.agents.shuffle().do("step")
         
         # 4. Recolectar datos
         self.datacollector.collect(self)
