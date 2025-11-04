@@ -201,6 +201,10 @@ class MosquitoAgent(Agent):
         - Si detecta humano dentro del rango sensorial (Sr = 3): moverse hacia él
         - Si no: caminata aleatoria (Moore neighborhood)
         """
+        # Verificar que el mosquito tenga posición (huevos no tienen posición)
+        if self.pos is None:
+            return
+        
         # Buscar humanos cercanos
         humano_cercano = self.buscar_humano_cercano()
         
@@ -256,6 +260,10 @@ class MosquitoAgent(Agent):
         Optional[HumanAgent]
             El humano más cercano si existe, None en caso contrario
         """
+        # Verificar que el mosquito tenga posición
+        if self.pos is None:
+            return None
+        
         # Obtener vecinos dentro del rango sensorial
         vecinos = self.model.grid.get_neighbors(
             self.pos,
@@ -285,6 +293,10 @@ class MosquitoAgent(Agent):
         - β (humano → mosquito): human_to_mosquito_prob
         """
         if self.ha_picado_hoy:
+            return
+        
+        # Verificar que el mosquito tenga posición
+        if self.pos is None:
             return
         
         # Obtener agentes en la misma celda
@@ -319,6 +331,10 @@ class MosquitoAgent(Agent):
         Probabilidad de éxito desde configuración: prob_apareamiento_mosquito
         Solo hembras no apareadas pueden aparearse.
         """
+        # Verificar que el mosquito tenga posición
+        if self.pos is None:
+            return
+        
         # Obtener mosquitos en la misma celda
         agentes_celda = self.model.grid.get_cell_list_contents([self.pos])
         mosquitos = [a for a in agentes_celda 
