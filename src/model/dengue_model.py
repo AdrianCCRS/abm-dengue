@@ -699,7 +699,9 @@ class DengueModel(Model):
                              self.random.randrange(self.height))
             
             # Crear agente
+            unique_id = self.next_id()
             humano = HumanAgent(
+                unique_id=unique_id,
                 model=self,
                 tipo_movilidad=tipo,
                 pos_hogar=pos_hogar,
@@ -740,7 +742,9 @@ class DengueModel(Model):
                   self.random.randrange(self.height))
             
             # Crear agente
+            unique_id = self.next_id()
             mosquito = MosquitoAgent(
+                unique_id=unique_id,
                 model=self,
                 etapa=EtapaVida.ADULTO,
                 es_hembra=es_hembra
@@ -778,7 +782,9 @@ class DengueModel(Model):
                         self.random.randrange(self.height))
             
             # Crear huevo
+            unique_id = self.next_id()
             huevo = MosquitoAgent(
+                unique_id=unique_id,
                 model=self,
                 etapa=EtapaVida.HUEVO,
                 es_hembra=es_hembra,

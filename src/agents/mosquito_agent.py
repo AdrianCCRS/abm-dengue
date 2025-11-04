@@ -75,12 +75,13 @@ class MosquitoAgent(Agent):
     
     def __init__(
         self,
+        unique_id: int,
         model,
         etapa: EtapaVida = EtapaVida.ADULTO,
         es_hembra: bool = True,
         sitio_cria: Optional[Tuple[int, int]] = None
     ):
-        super().__init__(model)
+        super().__init__(unique_id, model)
         
         # Estado epidemiológico
         self.estado = EstadoMosquito.SUSCEPTIBLE
@@ -362,7 +363,9 @@ class MosquitoAgent(Agent):
             es_hembra = self.random.random() < prob_hembra
             
             # Crear huevo
+            unique_id = self.model.next_id()
             huevo = MosquitoAgent(
+                unique_id=unique_id,
                 model=self.model,
                 etapa=EtapaVida.HUEVO,
                 es_hembra=es_hembra,

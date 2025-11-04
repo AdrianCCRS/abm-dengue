@@ -76,12 +76,13 @@ class HumanAgent(Agent):
     
     def __init__(
         self,
+        unique_id: int,
         model,
         tipo_movilidad: TipoMovilidad,
         pos_hogar: Tuple[int, int],
         pos_destino: Optional[Tuple[int, int]] = None
     ):
-        super().__init__(model)
+        super().__init__(unique_id, model)
         
         # Estado epidemiológico
         self.estado = EstadoSalud.SUSCEPTIBLE
