@@ -174,7 +174,9 @@ class MosquitoAgent(Agent):
         
         # 1. Mortalidad diaria (usar parámetro del modelo)
         if self.random.random() < self.tasa_mortalidad:
-            self.model.grid.remove_agent(self)
+            # Solo remover del grid si tiene posición
+            if self.pos is not None:
+                self.model.grid.remove_agent(self)
             self.model.agents.remove(self)
             return
         
