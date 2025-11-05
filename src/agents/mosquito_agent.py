@@ -151,7 +151,7 @@ class MosquitoAgent(Agent):
         - temp_optima: 25°C para Aedes aegypti
         - sensibilidad: 1.0 día por cada grado de desviación
         """
-        temperatura = self.model.temperatura
+        temperatura = self.model.temperatura_actual
         duracion_dias = self.dias_base_desarrollo_huevo + abs(temperatura - self.temp_optima_desarrollo_huevo) * self.sensibilidad_temp_desarrollo_huevo
     
     def eclosionar(self):
@@ -210,22 +210,24 @@ class MosquitoAgent(Agent):
         Movimiento del mosquito: caminata aleatoria o dirigida.
         
         Lógica:
-        - Si detecta humano dentro del rango sensorial (Sr = 3): moverse hacia él
+        - Solo hembras buscan humanos (machos no pican, no necesitan buscarlos)
+        - Si hembra detecta humano dentro del rango sensorial (Sr = 3): moverse hacia él
         - Si no: caminata aleatoria (Moore neighborhood)
         """
         # Verificar que el mosquito tenga posición (huevos no tienen posición)
         if self.pos is None:
             return
         
-        # Buscar humanos cercanos
-        humano_cercano = self.buscar_humano_cercano()
+        # Solo hembras buscan humanos activamente (OPTIMIZACIÓN: machos no pican)
+        if self.es_hembra:
+            humano_cercano = self.buscar_humano_cercano()
+            if humano_cercano:
+                # Moverse hacia el humano detectado
+                self.mover_hacia(humano_cercano.pos)
+                return
         
-        if humano_cercano:
-            # Moverse hacia el humano detectado
-            self.mover_hacia(humano_cercano.pos)
-        else:
-            # Caminata aleatoria
-            self.mover_aleatorio()
+        # Caminata aleatoria (machos siempre, hembras si no detectan humano)
+        self.mover_aleatorio()
     
     def mover_aleatorio(self):
         """Movimiento aleatorio a una celda vecina (Moore neighborhood)."""
