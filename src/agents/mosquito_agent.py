@@ -433,11 +433,8 @@ class MosquitoAgent(Agent):
         Optional[Tuple[int, int]]
             Coordenadas del sitio de cría más cercano o None
         """
-        from ..model.celda import TipoCelda
-        
-        # Sitios permanentes (celdas tipo AGUA)
-        sitios_agua = [pos for pos, celda in self.model.mapa_celdas.items()
-                       if celda.tipo == TipoCelda.AGUA]
+        # Usar la lista de sitios permanentes cacheada en el modelo (OPTIMIZACIÓN)
+        sitios_agua = self.model.sitios_cria
         
         # Sitios temporales (charcos post-lluvia) - si existen
         sitios_temp = []

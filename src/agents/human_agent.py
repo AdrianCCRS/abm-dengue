@@ -316,11 +316,8 @@ class HumanAgent(Agent):
         Optional[Tuple[int, int]]
             Coordenadas del parque más cercano o None si no hay parques
         """
-        from ..model.celda import TipoCelda
-        
-        # Filtrar celdas tipo parque
-        parques = [pos for pos, celda in self.model.mapa_celdas.items() 
-                   if celda.tipo == TipoCelda.PARQUE]
+        # Usar la lista de parques cacheada en el modelo (OPTIMIZACIÓN)
+        parques = getattr(self.model, 'parques', [])
         
         if not parques:
             return None

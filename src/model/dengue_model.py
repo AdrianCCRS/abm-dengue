@@ -143,6 +143,9 @@ class DengueModel(Model):
         # Sitios de cría (desde mapa de celdas)
         self.sitios_cria = self._generar_sitios_cria()
         
+        # Cache de parques para búsqueda rápida (evita iterar sobre todas las celdas)
+        self.parques = self._generar_lista_parques()
+        
         # Contador de IDs único
         self._next_id = 0
         
@@ -649,6 +652,24 @@ class DengueModel(Model):
                  if celda.tipo == TipoCelda.AGUA]
         
         return sitios
+    
+    def _generar_lista_parques(self) -> List[Tuple[int, int]]:
+        """
+        Genera lista de posiciones de parques para búsqueda rápida.
+        
+        Evita tener que filtrar todas las celdas cada vez que un humano
+        busca un parque cercano.
+        
+        Returns
+        -------
+        List[Tuple[int, int]]
+            Lista de coordenadas de parques
+        """
+        # Extraer celdas tipo PARQUE del mapa
+        parques = [pos for pos, celda in self.mapa_celdas.items() 
+                  if celda.tipo == TipoCelda.PARQUE]
+        
+        return parques
     
     def _crear_humanos(self, num_humanos: int, infectados_iniciales: int):
         """
