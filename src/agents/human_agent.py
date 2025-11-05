@@ -99,18 +99,30 @@ class HumanAgent(Agent):
         # Métricas
         self.num_picaduras = 0
         
-        # Parámetros del modelo SEIR (días) - desde configuración del modelo
-        self.duracion_expuesto = getattr(model, 'incubacion_humano', 5)  # Ne = 5 días (por defecto)
-        self.duracion_infectado = getattr(model, 'infeccioso_humano', 6)  # Ni = 6 días (por defecto)
+        # Parámetros del modelo SEIR (cacheados para rendimiento)
+        self.duracion_expuesto = model.incubacion_humano  # Ne = 5 días
+        self.duracion_infectado = model.infeccioso_humano  # Ni = 6 días
+        self.radio_mov_infectado = model.radio_mov_infectado  # Radio restringido cuando infectado
         
-        # Probabilidades de visita a parque según tipo - desde configuración del modelo
+        # Probabilidades de visita a parque según tipo (cacheadas)
         park_probs = {
-            TipoMovilidad.ESTUDIANTE: getattr(model, 'prob_parque_estudiante', 0.3),
-            TipoMovilidad.TRABAJADOR: getattr(model, 'prob_parque_trabajador', 0.1),
-            TipoMovilidad.MOVIL_CONTINUO: getattr(model, 'prob_parque_movil', 0.15),
-            TipoMovilidad.ESTACIONARIO: getattr(model, 'prob_parque_estacionario', 0.05)
+            TipoMovilidad.ESTUDIANTE: model.prob_parque_estudiante,
+            TipoMovilidad.TRABAJADOR: model.prob_parque_trabajador,
+            TipoMovilidad.MOVIL_CONTINUO: model.prob_parque_movil,
+            TipoMovilidad.ESTACIONARIO: model.prob_parque_estacionario
         }
         self.prob_parque = park_probs.get(tipo_movilidad, 0.1)
+        
+        # Parámetros de horarios (cacheados)
+        self.hora_inicio_escuela = model.hora_inicio_escuela
+        self.hora_fin_escuela = model.hora_fin_escuela
+        self.hora_inicio_trabajo = model.hora_inicio_trabajo
+        self.hora_fin_trabajo = model.hora_fin_trabajo
+        self.hora_inicio_parque = model.hora_inicio_parque
+        self.hora_fin_parque = model.hora_fin_parque
+        self.intervalo_movimiento_horas = model.intervalo_movimiento_horas
+        self.hora_inicio_movil_activo = model.hora_inicio_movil_activo
+        self.hora_fin_movil_activo = model.hora_fin_movil_activo
     
     def step(self):
         """
@@ -210,13 +222,12 @@ class HumanAgent(Agent):
                 self.mover_a(self.pos_hogar)
                 return
             else:
-                # Sin aislamiento: movilidad reducida (solo celdas vecinas al hogar)
-                radio_mov = getattr(self.model, 'radio_mov_infectado', 1)
+                # Sin aislamiento: movilidad reducida (usar radio cacheado)
                 vecindad = self.model.grid.get_neighborhood(
                     self.pos_hogar,
                     moore=True,
                     include_center=True,
-                    radius=radio_mov
+                    radius=self.radio_mov_infectado
                 )
                 nueva_pos = self.random.choice(vecindad)
                 self.mover_a(nueva_pos)
@@ -239,16 +250,11 @@ class HumanAgent(Agent):
     
     def _movilidad_estudiante(self, hora: int):
         """Patrón de movilidad para estudiantes (Tipo 1)."""
-        # Obtener horarios desde configuración del modelo
-        hora_inicio_escuela = getattr(self.model, 'hora_inicio_escuela', 7)
-        hora_fin_escuela = getattr(self.model, 'hora_fin_escuela', 15)
-        hora_inicio_parque = getattr(self.model, 'hora_inicio_parque', 16)
-        hora_fin_parque = getattr(self.model, 'hora_fin_parque', 19)
-        
-        if hora_inicio_escuela <= hora < hora_fin_escuela:  # En escuela
+        # Usar horarios cacheados
+        if self.hora_inicio_escuela <= hora < self.hora_fin_escuela:  # En escuela
             if self.pos_destino:
                 self.mover_a(self.pos_destino)
-        elif hora_inicio_parque <= hora < hora_fin_parque:  # Posible visita a parque
+        elif self.hora_inicio_parque <= hora < self.hora_fin_parque:  # Posible visita a parque
             if self.random.random() < self.prob_parque:
                 parque = self._obtener_parque_cercano()
                 if parque:
@@ -260,16 +266,11 @@ class HumanAgent(Agent):
     
     def _movilidad_trabajador(self, hora: int):
         """Patrón de movilidad para trabajadores (Tipo 2)."""
-        # Obtener horarios desde configuración del modelo
-        hora_inicio_trabajo = getattr(self.model, 'hora_inicio_trabajo', 7)
-        hora_fin_trabajo = getattr(self.model, 'hora_fin_trabajo', 17)
-        hora_inicio_parque = getattr(self.model, 'hora_inicio_parque', 17)
-        hora_fin_parque = getattr(self.model, 'hora_fin_parque', 19)
-        
-        if hora_inicio_trabajo <= hora < hora_fin_trabajo:  # En oficina
+        # Usar horarios cacheados
+        if self.hora_inicio_trabajo <= hora < self.hora_fin_trabajo:  # En oficina
             if self.pos_destino:
                 self.mover_a(self.pos_destino)
-        elif hora_inicio_parque <= hora < hora_fin_parque:  # Posible visita a parque
+        elif self.hora_inicio_parque <= hora < self.hora_fin_parque:  # Posible visita a parque
             if self.random.random() < self.prob_parque:
                 parque = self._obtener_parque_cercano()
                 if parque:
@@ -281,14 +282,10 @@ class HumanAgent(Agent):
     
     def _movilidad_movil_continuo(self, hora: int):
         """Patrón de movilidad para móviles continuos (Tipo 3)."""
-        # Obtener parámetros desde configuración del modelo
-        intervalo_movimiento = getattr(self.model, 'intervalo_movimiento_horas', 2)
-        hora_inicio_activo = getattr(self.model, 'hora_inicio_movil_activo', 7)
-        hora_fin_activo = getattr(self.model, 'hora_fin_movil_activo', 19)
-        
-        if hora_inicio_activo <= hora < hora_fin_activo:  # Horario activo
+        # Usar parámetros cacheados
+        if self.hora_inicio_movil_activo <= hora < self.hora_fin_movil_activo:  # Horario activo
             # Cambiar ubicación según intervalo
-            if hora % intervalo_movimiento == 0:
+            if hora % self.intervalo_movimiento_horas == 0:
                 nueva_pos = self._obtener_posicion_aleatoria()
                 self.mover_a(nueva_pos)
         else:  # Resto del día: en hogar
@@ -316,14 +313,12 @@ class HumanAgent(Agent):
         Optional[Tuple[int, int]]
             Coordenadas del parque más cercano o None si no hay parques
         """
-        # Usar la lista de parques cacheada en el modelo (OPTIMIZACIÓN)
-        parques = getattr(self.model, 'parques', [])
-        
-        if not parques:
+        # Usar la lista de parques cacheada en el modelo (ya accesible directamente)
+        if not self.model.parques:
             return None
         
         # Retornar el más cercano a la posición actual
-        return min(parques, key=lambda p: self._distancia_manhattan(p))
+        return min(self.model.parques, key=lambda p: self._distancia_manhattan(p))
     
     def _distancia_manhattan(self, pos: Tuple[int, int]) -> int:
         """

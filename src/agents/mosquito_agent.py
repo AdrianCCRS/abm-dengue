@@ -13,7 +13,10 @@ Universidad Industrial de Santander - Simulación Digital F1
 from mesa import Agent
 import numpy as np
 from enum import Enum
-from typing import Tuple, Optional, List
+from typing import Tuple, Optional, List, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .human_agent import HumanAgent
 
 
 class EstadoMosquito(Enum):
@@ -97,11 +100,30 @@ class MosquitoAgent(Agent):
         self.esta_apareado = False if es_hembra else True  # Machos siempre "listos"
         self.sitio_cria = sitio_cria
         
-        # Parámetros desde configuración del modelo (con valores por defecto)
-        self.tasa_mortalidad = getattr(model, 'mortalidad_mosquito', 0.05)  # Mr = 0.05 por día
-        self.rango_sensorial = getattr(model, 'rango_sensorial_mosquito', 3)  # Sr = 3 celdas
-        self.prob_apareamiento = getattr(model, 'prob_apareamiento_mosquito', 0.6)  # Pm = 0.6
-        self.huevos_por_hembra = getattr(model, 'huevos_por_hembra', 100)  # 100 huevos por puesta
+        # Parámetros desde configuración del modelo (cacheados para rendimiento)
+        self.tasa_mortalidad = model.mortalidad_mosquito
+        self.rango_sensorial = model.rango_sensorial_mosquito
+        self.prob_apareamiento = model.prob_apareamiento_mosquito
+        self.huevos_por_hembra = model.huevos_por_hembra
+        
+        # Parámetros de desarrollo de huevos (cacheados)
+        self.dias_base_desarrollo_huevo = model.dias_base_desarrollo_huevo
+        self.temp_optima_desarrollo_huevo = model.temp_optima_desarrollo_huevo
+        self.sensibilidad_temp_desarrollo_huevo = model.sensibilidad_temp_desarrollo_huevo
+        
+        # Parámetros de transmisión (cacheados)
+        self.prob_transmision_mosquito_humano = model.prob_transmision_mosquito_humano  # α
+        self.prob_transmision_humano_mosquito = model.prob_transmision_humano_mosquito  # β
+        
+        # Parámetros de reproducción (cacheados)
+        self.umbral_precipitacion_cria = model.umbral_precipitacion_cria
+        self.proporcion_hembras = model.proporcion_hembras
+        self.dias_base_maduracion_huevo = model.dias_base_maduracion_huevo
+        self.temp_optima_maduracion_huevo = model.temp_optima_maduracion_huevo
+        self.sensibilidad_temp_maduracion_huevo = model.sensibilidad_temp_maduracion_huevo
+        
+        # Parámetros de movimiento (cacheados)
+        self.rango_vuelo_max = model.rango_vuelo_max
     
     def step(self):
         """
@@ -123,26 +145,14 @@ class MosquitoAgent(Agent):
         Fórmula de duración dependiente de temperatura:
         μ = base_dias + |θ - temp_optima| * sensibilidad
         
-        Por defecto: μ = 8 + |θ - 25| * 1.0 días
-        
-        Donde θ es la temperatura diaria del modelo.
+        Donde:
+        - θ: temperatura actual (°C)
+        - base_dias: 8 días a temperatura óptima
+        - temp_optima: 25°C para Aedes aegypti
+        - sensibilidad: 1.0 día por cada grado de desviación
         """
-        self.dias_como_huevo += 1
-        
-        # Obtener temperatura actual del modelo
-        temperatura = self.model.temperatura_actual if hasattr(self.model, 'temperatura_actual') else 25
-        
-        # Obtener parámetros de desarrollo desde el modelo
-        base_dias = getattr(self.model, 'dias_base_desarrollo_huevo', 8)
-        temp_optima = getattr(self.model, 'temp_optima_desarrollo_huevo', 25.0)
-        sensibilidad = getattr(self.model, 'sensibilidad_temp_desarrollo_huevo', 1.0)
-        
-        # Calcular días necesarios para eclosión
-        dias_desarrollo = base_dias + abs(temperatura - temp_optima) * sensibilidad
-        
-        # Eclosionar si se cumplió el tiempo
-        if self.dias_como_huevo >= dias_desarrollo:
-            self.eclosionar()
+        temperatura = self.model.temperatura
+        duracion_dias = self.dias_base_desarrollo_huevo + abs(temperatura - self.temp_optima_desarrollo_huevo) * self.sensibilidad_temp_desarrollo_huevo
     
     def eclosionar(self):
         """
@@ -274,8 +284,9 @@ class MosquitoAgent(Agent):
             radius=self.rango_sensorial
         )
         
-        # Filtrar solo humanos
-        humanos = [agente for agente in vecinos if agente.__class__.__name__ == 'HumanAgent']
+        # Filtrar solo humanos (isinstance es más rápido que __class__.__name__)
+        from .human_agent import HumanAgent
+        humanos = [agente for agente in vecinos if isinstance(agente, HumanAgent)]
         
         if humanos:
             # Retornar el más cercano
@@ -303,7 +314,8 @@ class MosquitoAgent(Agent):
         
         # Obtener agentes en la misma celda
         agentes_celda = self.model.grid.get_cell_list_contents([self.pos])
-        humanos = [a for a in agentes_celda if a.__class__.__name__ == 'HumanAgent']
+        from .human_agent import HumanAgent
+        humanos = [a for a in agentes_celda if isinstance(a, HumanAgent)]
         
         if not humanos:
             return
@@ -312,9 +324,9 @@ class MosquitoAgent(Agent):
         humano = self.random.choice(humanos)
         self.ha_picado_hoy = True
         
-        # Obtener probabilidades de transmisión desde el modelo
-        alpha = getattr(self.model, 'prob_transmision_mosquito_humano', 0.6)  # α
-        beta = getattr(self.model, 'prob_transmision_humano_mosquito', 0.275)  # β
+        # Usar probabilidades de transmisión cacheadas
+        alpha = self.prob_transmision_mosquito_humano  # α
+        beta = self.prob_transmision_humano_mosquito  # β
         
         # Transmisión mosquito → humano (α)
         if self.estado == EstadoMosquito.INFECTADO and humano.es_susceptible():
@@ -340,7 +352,7 @@ class MosquitoAgent(Agent):
         # Obtener mosquitos en la misma celda
         agentes_celda = self.model.grid.get_cell_list_contents([self.pos])
         mosquitos = [a for a in agentes_celda 
-                    if a.__class__.__name__ == 'MosquitoAgent' 
+                    if isinstance(a, MosquitoAgent)
                     and a.etapa == EtapaVida.ADULTO 
                     and not a.es_hembra]
         
@@ -362,9 +374,8 @@ class MosquitoAgent(Agent):
         """
         # Verificar precipitación (necesaria para sitios de cría activos)
         precipitacion = self.model.precipitacion_actual if hasattr(self.model, 'precipitacion_actual') else 0
-        umbral_lluvia = getattr(self.model, 'umbral_precipitacion_cria', 0.0)
         
-        if precipitacion < umbral_lluvia:
+        if precipitacion < self.umbral_precipitacion_cria:
             return
         
         # Buscar sitio de cría cercano
@@ -372,8 +383,8 @@ class MosquitoAgent(Agent):
         if not sitio:
             return
         
-        # Obtener parámetros desde el modelo
-        prob_hembra = getattr(self.model, 'proporcion_hembras', 0.5)  # Pf = 0.5
+        # Poner huevos con proporción de hembras cacheada
+        prob_hembra = self.proporcion_hembras  # Pf = 0.5
         
         # Poner huevos
         for _ in range(self.huevos_por_hembra):
@@ -416,11 +427,7 @@ class MosquitoAgent(Agent):
         int
             Días necesarios para maduración
         """
-        base_dias = getattr(self.model, 'dias_base_maduracion_huevo', 3)
-        temp_optima = getattr(self.model, 'temp_optima_maduracion_huevo', 21.0)
-        sensibilidad = getattr(self.model, 'sensibilidad_temp_maduracion_huevo', 5.0)
-        
-        return int(base_dias + abs(temperatura - temp_optima) / sensibilidad)
+        return int(self.dias_base_maduracion_huevo + abs(temperatura - self.temp_optima_maduracion_huevo) / self.sensibilidad_temp_maduracion_huevo)
     
     def _buscar_sitio_cria(self) -> Optional[Tuple[int, int]]:
         """
@@ -447,10 +454,9 @@ class MosquitoAgent(Agent):
         if not sitios_disponibles:
             return None
         
-        # Filtrar por rango de vuelo máximo (Fr = ~350m)
-        rango_max = getattr(self.model, 'rango_vuelo_max', 10)  # 10 celdas por defecto
+        # Filtrar por rango de vuelo máximo cacheado (Fr = ~350m)
         sitios_alcanzables = [s for s in sitios_disponibles 
-                              if self._distancia(s) <= rango_max]
+                              if self._distancia(s) <= self.rango_vuelo_max]
         
         if not sitios_alcanzables:
             # Si ninguno alcanzable, retornar el más cercano aunque esté lejos

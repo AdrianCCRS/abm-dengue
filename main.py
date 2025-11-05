@@ -130,8 +130,8 @@ def ejecutar_simulacion(
     for i in range(steps):
         modelo.step()
         
-        # Mostrar progreso cada 5 días para seguimiento más detallado
-        if verbose and (i + 1) % 5 == 0:
+        # Mostrar progreso DIARIO para seguimiento en tiempo real
+        if verbose:
             infectados = modelo._contar_humanos_estado(EstadoSalud.INFECTADO)
             expuestos = modelo._contar_humanos_estado(EstadoSalud.EXPUESTO)
             recuperados = modelo._contar_humanos_estado(EstadoSalud.RECUPERADO)
@@ -140,12 +140,15 @@ def ejecutar_simulacion(
             huevos = modelo._contar_huevos()
             susceptibles = modelo._contar_humanos_estado(EstadoSalud.SUSCEPTIBLE)
             
-            print(f"📅 Día {i+1:3d}: "
+            # Imprimir en la misma línea (sobrescribir)
+            print(f"\r📅 Día {i+1:3d}/{steps}: "
                   f"👥 S:{susceptibles:3d} E:{expuestos:2d} I:{infectados:2d} R:{recuperados:3d} "
                   f"| 🦟 A:{mosquitos_adultos:3d} (I:{mosquitos_inf:2d}) H:{huevos:3d} "
-                  f"| 🌡️{modelo.temperatura_actual:4.1f}°C 🌧️{modelo.precipitacion_actual:4.1f}mm")
+                  f"| 🌡️{modelo.temperatura_actual:4.1f}°C 🌧️{modelo.precipitacion_actual:4.1f}mm", 
+                  end='', flush=True)
     
     if verbose:
+        print()  # Nueva línea después del último día
         print("\n" + "="*70)
         print("✅ Simulación completada!")
         print(f"📊 Resumen final:")
