@@ -130,26 +130,29 @@ def ejecutar_simulacion(
     for i in range(steps):
         modelo.step()
         
-        # Mostrar progreso cada 10 días (más frecuente para ver avance)
-        if verbose and (i + 1) % 10 == 0:
+        # Mostrar progreso cada 5 días para seguimiento más detallado
+        if verbose and (i + 1) % 5 == 0:
             infectados = modelo._contar_humanos_estado(EstadoSalud.INFECTADO)
             expuestos = modelo._contar_humanos_estado(EstadoSalud.EXPUESTO)
             recuperados = modelo._contar_humanos_estado(EstadoSalud.RECUPERADO)
             mosquitos_adultos = modelo._contar_mosquitos_adultos()
             mosquitos_inf = modelo._contar_mosquitos_estado(EstadoMosquito.INFECTADO)
             huevos = modelo._contar_huevos()
+            susceptibles = modelo._contar_humanos_estado(EstadoSalud.SUSCEPTIBLE)
             
             print(f"📅 Día {i+1:3d}: "
-                  f"👥 S:{modelo._contar_humanos_estado(EstadoSalud.SUSCEPTIBLE):3d} "
-                  f"E:{expuestos:2d} I:{infectados:2d} R:{recuperados:3d} | "
-                  f"🦟 Adultos:{mosquitos_adultos:3d} (Inf:{mosquitos_inf:2d}) "
-                  f"Huevos:{huevos:3d} | "
-                  f"🌡️ {modelo.temperatura_actual:.1f}°C "
-                  f"🌧️ {modelo.precipitacion_actual:.1f}mm")
+                  f"👥 S:{susceptibles:3d} E:{expuestos:2d} I:{infectados:2d} R:{recuperados:3d} "
+                  f"| 🦟 A:{mosquitos_adultos:3d} (I:{mosquitos_inf:2d}) H:{huevos:3d} "
+                  f"| 🌡️{modelo.temperatura_actual:4.1f}°C 🌧️{modelo.precipitacion_actual:4.1f}mm")
     
     if verbose:
         print("\n" + "="*70)
         print("✅ Simulación completada!")
+        print(f"📊 Resumen final:")
+        print(f"   • Total infectados: {modelo._contar_humanos_estado(EstadoSalud.INFECTADO)}")
+        print(f"   • Total recuperados: {modelo._contar_humanos_estado(EstadoSalud.RECUPERADO)}")
+        print(f"   • Mosquitos adultos: {modelo._contar_mosquitos_adultos()}")
+        print(f"   • Tasa de ataque: {modelo._contar_humanos_estado(EstadoSalud.RECUPERADO)/num_humanos*100:.1f}%")
         print("="*70)
     
     return modelo
