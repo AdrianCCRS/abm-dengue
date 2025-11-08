@@ -1,0 +1,71 @@
+{
+  "name": "ABM-Dengue-Bucaramanga",
+  "description": "Simulación basada en agentes (ABM) para modelar la propagación del dengue en Bucaramanga, inspirada en Jindal et al. (2017) y desarrollada para la asignatura Simulación Digital F1 en la Universidad Industrial de Santander. Implementada en Python con Mesa y orientada a comparar estrategias de control vectorial bajo condiciones climáticas reales.",
+  "context": {
+    "course": "Simulación Digital F1 — Universidad Industrial de Santander",
+    "authors": [
+      "Yeison Adrián Cáceres Torres",
+      "William Urrutia Torres",
+      "Jhon Anderson Vargas Gómez"
+    ],
+    "objectives": {
+      "general": "Construir un modelo de simulación basado en agentes que ilustre la propagación del dengue en Bucaramanga, identificando patrones de difusión y evaluando cómo diversas estrategias de control influyen sobre la tasa de transmisión, población vectorial y duración del brote.",
+      "specific": [
+        "Representar la interacción entre agentes humanos y mosquitos Aedes aegypti en un entorno simplificado.",
+        "Analizar cómo la movilidad humana afecta la propagación espacial de la infección.",
+        "Evaluar el impacto de estrategias de control centralizadas (LSM) y descentralizadas (ITN/IRS).",
+        "Calibrar los parámetros de transmisión y mortalidad vectorial con datos reales de Bucaramanga."
+      ]
+    },
+    "model_structure": {
+      "agents": {
+        "HumanAgent": "Representa individuos humanos con estados SEIR (Susceptible, Expuesto, Infectado, Recuperado). Incluye comportamiento de movilidad diaria hogar–trabajo–parque.",
+        "MosquitoAgent": "Representa mosquitos adultos con estados S/I, edad y comportamiento de búsqueda de humanos. Su reproducción depende de temperatura y lluvia.",
+        "Environment": "Espacio donde los agentes interactúan, con condiciones climáticas variables (temperatura y precipitación) que afectan el ciclo vectorial."
+      },
+      "strategies": {
+        "LSM": "Gestión de fuentes larvarias (eliminación de criaderos) que reduce la población vectorial.",
+        "ITN_IRS": "Medidas de protección individual (mosquiteros e insecticidas) que reducen la probabilidad de picadura y transmisión."
+      }
+    },
+    "simulation_flow": [
+      "Inicializar agentes humanos y mosquitos en una cuadrícula de N×N celdas.",
+      "Actualizar condiciones climáticas diarias (temperatura, precipitación).",
+      "Mover agentes humanos según patrones definidos (hogar, trabajo, ocio).",
+      "Mosquitos buscan humanos cercanos para alimentarse y transmitir el virus.",
+      "Actualizar estados SEIR/SI según tiempos de incubación e infección.",
+      "Aplicar estrategias de control según el escenario seleccionado.",
+      "Recolectar métricas de interés (infectados, mosquitos, duración del brote)."
+    ],
+    "data_sources": {
+      "climate": "API Meteostat (temperatura y precipitación diarias en Bucaramanga).",
+      "epidemiology": "Datos Abiertos Colombia – Casos de dengue en Bucaramanga.",
+      "demography": "Proyecciones oficiales de población urbana por sector."
+    },
+    "evaluation_metrics": [
+      "Número total de personas infectadas.",
+      "Evolución de la población vectorial (adultos y huevos).",
+      "Tiempo de eliminación del brote.",
+      "Comparación entre estrategias de control."
+    ],
+    "technologies": {
+      "python": "3.10",
+      "libraries": [
+        "mesa",
+        "numpy",
+        "pandas",
+        "matplotlib",
+        "seaborn",
+        "requests"
+      ],
+      "r_analysis": "Análisis estadístico y visualización comparativa con datos reales de dengue y clima en R."
+    },
+    "code_guidelines": {
+      "architecture": "modular",
+      "docstrings": "Formato NumPy",
+      "output": "Resultados en /results/output.csv y gráficas en /results/plots/",
+      "docker_support": true
+    },
+    "language": "Spanish"
+  }
+}

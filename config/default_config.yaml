@@ -1,0 +1,91 @@
+# Configuración por defecto para el modelo ABM del Dengue
+
+simulation:
+  steps: 365
+  width: 150
+  height: 150
+  num_humanos: 3000
+  num_mosquitos: 1500
+  num_huevos: 50
+  infectados_iniciales: 5
+  mosquitos_infectados_iniciales: 2
+  usar_lsm: false
+  usar_itn_irs: false
+  seed: null
+
+human_disease:
+  incubation_period: 5.0
+  infectious_period: 6.0
+
+mosquito_disease:
+  mortality_rate: 0.05
+  sensory_range: 3
+
+transmission:
+  mosquito_to_human_prob: 0.6
+  human_to_mosquito_prob: 0.275
+
+mobility:
+  park_probability_student: 0.3
+  park_probability_worker: 0.1
+  park_probability_mobile: 0.15
+  park_probability_stationary: 0.05
+  school_start_hour: 7
+  school_end_hour: 15
+  work_start_hour: 7
+  work_end_hour: 17
+  park_start_hour: 16
+  park_end_hour: 19
+  mobile_move_interval_hours: 2
+  mobile_active_start_hour: 7
+  mobile_active_end_hour: 19
+
+mosquito_breeding:
+  eggs_per_female: 100
+  mating_probability: 0.6
+  female_ratio: 0.5
+  egg_maturation_base_days: 3
+  egg_maturation_temp_optimal: 21.0
+  egg_maturation_temp_sensitivity: 5.0
+  egg_to_adult_base_days: 8
+  egg_to_adult_temp_optimal: 25.0
+  egg_to_adult_temp_sensitivity: 1.0
+  rainfall_threshold: 0.0
+  breeding_site_ratio: 0.2
+
+population:
+  mobility_distribution:
+    student: 0.25
+    worker: 0.35
+    mobile: 0.25
+    stationary: 0.15
+
+environment:
+  cell_types:
+    water_ratio: 0.05
+    park_ratio: 0.10
+  zone_sizes:
+    water_min: 2
+    water_max: 4
+    park_min: 3
+    park_max: 6
+  mosquito_flight:
+    max_range: 10
+  synthetic_climate:
+    rain_probability: 0.3
+    rain_min_mm: 5.0
+    rain_max_mm: 50.0
+
+control:
+  lsm:
+    frequency_days: 7
+    coverage: 0.7
+    effectiveness: 0.8
+  itn_irs:
+    duration_days: 90
+    coverage: 0.6
+    effectiveness: 0.7
+
+human_behavior:
+  isolation_probability: 0.7
+  infected_mobility_radius: 1

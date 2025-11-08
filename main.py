@@ -29,7 +29,7 @@ from src.agents import EstadoSalud, EstadoMosquito
 
 def cargar_configuracion(archivo_config: str) -> dict:
     """
-    Carga configuración desde archivo YAML.
+    Carga configuración desde archivo YAML o JSON.
     
     Parameters
     ----------
@@ -41,8 +41,21 @@ def cargar_configuracion(archivo_config: str) -> dict:
     dict
         Diccionario con parámetros de configuración
     """
-    with open(archivo_config, 'r', encoding='utf-8') as f:
-        config = yaml.safe_load(f)
+    import json
+    from pathlib import Path
+    ruta = Path(archivo_config)
+    with ruta.open('r', encoding='utf-8') as f:
+        if ruta.suffix.lower() in ('.yaml', '.yml'):
+            config = yaml.safe_load(f)
+        elif ruta.suffix.lower() == '.json':
+            config = json.load(f)
+        else:
+            # Intentar YAML primero y luego JSON
+            try:
+                config = yaml.safe_load(f)
+            except Exception:
+                f.seek(0)
+                config = json.load(f)
     return config
 
 
@@ -58,7 +71,8 @@ def ejecutar_simulacion(
     usar_lsm: bool = False,
     usar_itn_irs: bool = False,
     seed: int = None,
-    verbose: bool = True
+    verbose: bool = True,
+    config: dict | None = None
 ) -> DengueModel:
     """
     Ejecuta la simulación del modelo ABM del Dengue.
@@ -100,7 +114,7 @@ def ejecutar_simulacion(
         print("=" * 70)
         print("SIMULACIÓN ABM DEL DENGUE - BUCARAMANGA")
         print("=" * 70)
-        print(f"\n⚙️  Configuración:")
+        print(f"\n Configuración:")
         print(f"   • Días a simular: {steps}")
         print(f"   • Grid: {width}×{height}")
         print(f"   • Población humana: {num_humanos}")
@@ -110,7 +124,7 @@ def ejecutar_simulacion(
         print(f"   • Control LSM: {'✓' if usar_lsm else '✗'}")
         print(f"   • Control ITN/IRS: {'✓' if usar_itn_irs else '✗'}")
         print(f"   • Semilla: {seed if seed else 'Aleatoria'}")
-        print("\n🚀 Iniciando simulación...\n")
+        print("\n Iniciando simulación...\n")
     
     modelo = DengueModel(
         width=width,
@@ -123,7 +137,8 @@ def ejecutar_simulacion(
         usar_lsm=usar_lsm,
         usar_itn_irs=usar_itn_irs,
         fecha_inicio=datetime.now(),
-        seed=seed
+        seed=seed,
+        config=config
     )
     
     # Ejecutar simulación
@@ -295,8 +310,9 @@ def main():
     )
     
     # Argumentos de línea de comandos
-    parser.add_argument('--config', type=str, help='Archivo de configuración YAML')
-    parser.add_argument('--steps', type=int, default=365, help='Días a simular')
+    parser.add_argument('--config', type=str, help='Archivo de configuración YAML/JSON')
+    # Default=None para detectar si el usuario lo pasó explícitamente
+    parser.add_argument('--steps', type=int, default=None, help='Días a simular (CLI tiene prioridad sobre archivo)')
     parser.add_argument('--humanos', type=int, default=100, help='Número de humanos')
     parser.add_argument('--mosquitos', type=int, default=200, help='Número de mosquitos')
     parser.add_argument('--huevos', type=int, default=50, help='Número de huevos iniciales')
@@ -311,28 +327,60 @@ def main():
     
     # Cargar configuración si se especifica
     if args.config:
-        config = cargar_configuracion(args.config)
-        # Sobrescribir con argumentos CLI si se proporcionan
-        parametros = {
-            'steps': args.steps if args.steps != 365 else config.get('simulacion', {}).get('duracion_dias', 365),
-            'num_humanos': args.humanos if args.humanos != 100 else config.get('poblacion', {}).get('humanos', 100),
-            'num_mosquitos': args.mosquitos if args.mosquitos != 200 else config.get('poblacion', {}).get('mosquitos_adultos', 200),
-            'num_huevos': args.huevos if args.huevos != 50 else config.get('poblacion', {}).get('huevos', 50),
-            'infectados_iniciales': args.infectados,
-            'usar_lsm': args.lsm or config.get('control', {}).get('lsm', {}).get('activado', False),
-            'usar_itn_irs': args.itn_irs or config.get('control', {}).get('itn_irs', {}).get('activado', False),
-            'seed': args.seed
-        }
+        cfg = cargar_configuracion(args.config)
+        # Determinar parámetros de simulación desde config nueva (simulation) o legacy (simulacion/poblacion/control)
+        if 'simulation' in cfg:
+            sim = cfg['simulation']
+            # Prioridad: CLI (--steps) > archivo > default 365
+            steps = args.steps if args.steps is not None else sim.get('steps', 365)
+            num_humanos = sim.get('num_humanos', args.humanos)
+            num_mosquitos = sim.get('num_mosquitos', args.mosquitos)
+            num_huevos = sim.get('num_huevos', args.huevos)
+            infectados_iniciales = sim.get('infectados_iniciales', args.infectados)
+            usar_lsm = sim.get('usar_lsm', args.lsm)
+            usar_itn_irs = sim.get('usar_itn_irs', args.itn_irs)
+            seed = sim.get('seed', args.seed)
+            parametros = {
+                'steps': steps,
+                'num_humanos': num_humanos,
+                'num_mosquitos': num_mosquitos,
+                'num_huevos': num_huevos,
+                'infectados_iniciales': infectados_iniciales,
+                'usar_lsm': usar_lsm,
+                'usar_itn_irs': usar_itn_irs,
+                'seed': seed,
+                'config': cfg
+            }
+        else:
+            # Compatibilidad con esquema legacy
+            simulacion = cfg.get('simulacion', {})
+            poblacion = cfg.get('poblacion', {})
+            control = cfg.get('control', {})
+            # Prioridad: CLI (--steps) > archivo > default 365
+            steps = args.steps if args.steps is not None else simulacion.get('duracion_dias', 365)
+            parametros = {
+                'steps': steps,
+                'num_humanos': poblacion.get('humanos', args.humanos),
+                'num_mosquitos': poblacion.get('mosquitos_adultos', args.mosquitos),
+                'num_huevos': poblacion.get('huevos', args.huevos),
+                'infectados_iniciales': args.infectados,
+                'usar_lsm': control.get('lsm', {}).get('activado', args.lsm),
+                'usar_itn_irs': control.get('itn_irs', {}).get('activado', args.itn_irs),
+                'seed': args.seed,
+                'config': cfg
+            }
     else:
+        # Sin archivo: usar CLI o default 365
         parametros = {
-            'steps': args.steps,
+            'steps': args.steps if args.steps is not None else 365,
             'num_humanos': args.humanos,
             'num_mosquitos': args.mosquitos,
             'num_huevos': args.huevos,
             'infectados_iniciales': args.infectados,
             'usar_lsm': args.lsm,
             'usar_itn_irs': args.itn_irs,
-            'seed': args.seed
+            'seed': args.seed,
+            'config': None
         }
     
     # Ejecutar simulación

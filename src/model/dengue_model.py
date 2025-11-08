@@ -93,7 +93,8 @@ class DengueModel(Model):
         usar_itn_irs: bool = False,
         fecha_inicio: datetime = datetime(2024, 1, 1),
         seed: Optional[int] = None,
-        config: Optional[Dict[str, Any]] = None
+        config: Optional[Dict[str, Any]] = None,
+        config_file: Optional[str] = None
     ):
         super().__init__()
         
@@ -104,8 +105,12 @@ class DengueModel(Model):
         self.num_mosquitos = num_mosquitos
         self.num_huevos = num_huevos
         
+        # Cargar configuración desde archivo si se proporciona
+        if config_file:
+            cfg_dict = self._cargar_configuracion_archivo(config_file)
+            self._cargar_configuracion(cfg_dict)
         # Cargar configuración desde diccionario si se proporciona
-        if config:
+        elif config:
             self._cargar_configuracion(config)
         else:
             self._cargar_configuracion_default()
@@ -181,6 +186,44 @@ class DengueModel(Model):
         self.datacollector.collect(self)
         
         self.running = True
+
+    def _cargar_configuracion_archivo(self, ruta: str) -> Dict[str, Any]:
+        """
+        Carga configuración desde archivo YAML o JSON y retorna un dict.
+        
+        Parameters
+        ----------
+        ruta : str
+            Ruta al archivo de configuración (.yaml/.yml o .json)
+        
+        Returns
+        -------
+        Dict[str, Any]
+            Diccionario con la configuración cargada
+        """
+        import os
+        import json
+        try:
+            ext = os.path.splitext(ruta)[1].lower()
+            with open(ruta, 'r', encoding='utf-8') as f:
+                if ext in ('.yaml', '.yml'):
+                    import yaml  # lazy import
+                    return yaml.safe_load(f) or {}
+                elif ext == '.json':
+                    return json.load(f) or {}
+                else:
+                    # Intentar YAML por defecto
+                    try:
+                        import yaml
+                        f.seek(0)
+                        return yaml.safe_load(f) or {}
+                    except Exception:
+                        f.seek(0)
+                        return json.load(f) or {}
+        except FileNotFoundError:
+            raise FileNotFoundError(f"Archivo de configuración no encontrado: {ruta}")
+        except Exception as e:
+            raise RuntimeError(f"Error cargando configuración desde '{ruta}': {e}")
     
     def _cargar_configuracion(self, config: Dict[str, Any]):
         """
@@ -263,6 +306,25 @@ class DengueModel(Model):
         mosquito_flight = environment.get('mosquito_flight', {})
         self.rango_vuelo_max = mosquito_flight.get('max_range', 10)
         
+        # Parámetros de clima sintético
+        synthetic_climate = environment.get('synthetic_climate', {})
+        self.prob_lluvia = synthetic_climate.get('rain_probability', 0.3)
+        self.lluvia_min_mm = synthetic_climate.get('rain_min_mm', 5.0)
+        self.lluvia_max_mm = synthetic_climate.get('rain_max_mm', 50.0)
+        
+        # Parámetros de control LSM
+        control = config.get('control', {})
+        lsm = control.get('lsm', {})
+        self.lsm_frecuencia_dias = lsm.get('frequency_days', 7)
+        self.lsm_cobertura = lsm.get('coverage', 0.7)
+        self.lsm_efectividad = lsm.get('effectiveness', 0.8)
+        
+        # Parámetros de control ITN/IRS
+        itn_irs = control.get('itn_irs', {})
+        self.itn_irs_duracion_dias = itn_irs.get('duration_days', 90)
+        self.itn_irs_cobertura = itn_irs.get('coverage', 0.6)
+        self.itn_irs_efectividad = itn_irs.get('effectiveness', 0.7)
+        
         # Parámetros de comportamiento humano
         human_behavior = config.get('human_behavior', {})
         self.prob_aislamiento = human_behavior.get('isolation_probability', 0.7)
@@ -333,6 +395,21 @@ class DengueModel(Model):
         
         # Parámetros de vuelo de mosquitos
         self.rango_vuelo_max = 10  # ~350m si celda=35m
+        
+        # Parámetros de clima sintético
+        self.prob_lluvia = 0.3  # 30% probabilidad de lluvia
+        self.lluvia_min_mm = 5.0
+        self.lluvia_max_mm = 50.0
+        
+        # Parámetros de control LSM
+        self.lsm_frecuencia_dias = 7
+        self.lsm_cobertura = 0.7
+        self.lsm_efectividad = 0.8
+        
+        # Parámetros de control ITN/IRS
+        self.itn_irs_duracion_dias = 90
+        self.itn_irs_cobertura = 0.6
+        self.itn_irs_efectividad = 0.7
         
         # Parámetros de comportamiento humano
         self.prob_aislamiento = 0.7  # 70% se aíslan
@@ -441,17 +518,17 @@ class DengueModel(Model):
         """
         Genera precipitación sintética para Bucaramanga.
         
-        Modelo simple:
-        - Probabilidad de lluvia: 0.3
-        - Cantidad si llueve: 5-50mm
+        Modelo simple (configurable desde environment.synthetic_climate):
+        - Probabilidad de lluvia: prob_lluvia (por defecto 0.3)
+        - Cantidad si llueve: lluvia_min_mm a lluvia_max_mm (por defecto 5-50mm)
         
         Returns
         -------
         float
             Precipitación en mm
         """
-        if self.random.random() < 0.3:  # 30% probabilidad de lluvia
-            return self.random.uniform(5, 50)
+        if self.random.random() < self.prob_lluvia:
+            return self.random.uniform(self.lluvia_min_mm, self.lluvia_max_mm)
         return 0.0
     
     def _aplicar_control(self):
@@ -459,17 +536,17 @@ class DengueModel(Model):
         Aplica estrategias de control según configuración.
         
         LSM (Larval Source Management):
-        - Frecuencia: cada 7 días
-        - Cobertura: 70%
-        - Efectividad: 80% reducción de larvas
+        - Frecuencia: lsm_frecuencia_dias (por defecto 7 días)
+        - Cobertura: lsm_cobertura (por defecto 70%)
+        - Efectividad: lsm_efectividad (por defecto 80%)
         
         ITN/IRS (Insecticide-Treated Nets / Indoor Residual Spraying):
-        - Duración: 90 días por aplicación
-        - Cobertura: 60% hogares
-        - Efectividad: 70% reducción de picaduras
+        - Duración: itn_irs_duracion_dias (por defecto 90 días)
+        - Cobertura: itn_irs_cobertura (por defecto 60% hogares)
+        - Efectividad: itn_irs_efectividad (por defecto 70%)
         """
-        # LSM: Aplicar cada 7 días
-        if self.usar_lsm and self.dia_simulacion % 7 == 0:
+        # LSM: Aplicar según frecuencia configurada
+        if self.usar_lsm and self.dia_simulacion % self.lsm_frecuencia_dias == 0:
             self._aplicar_lsm()
         
         # ITN/IRS: Activar según necesidad
@@ -480,7 +557,8 @@ class DengueModel(Model):
         """
         Aplica control larvario (LSM).
         
-        Elimina huevos en sitios de cría con cobertura 70% y efectividad 80%.
+        Elimina huevos en sitios de cría con cobertura y efectividad configurables
+        (por defecto: 70% cobertura × 80% efectividad = 56% reducción).
         """
         self.lsm_activo = True
         
@@ -488,8 +566,8 @@ class DengueModel(Model):
         huevos = [a for a in self.agents 
                  if isinstance(a, MosquitoAgent) and a.etapa == EtapaVida.HUEVO]
         
-        # Aplicar reducción: 70% cobertura × 80% efectividad = 56% reducción
-        reduccion = 0.56
+        # Aplicar reducción: cobertura × efectividad
+        reduccion = self.lsm_cobertura * self.lsm_efectividad
         for huevo in huevos:
             if self.random.random() < reduccion:
                 self.agents.remove(huevo)
@@ -755,8 +833,8 @@ class DengueModel(Model):
         infectados_asignados = 0
         
         for i in range(num_mosquitos):
-            # Determinar sexo: Pf = 0.5
-            es_hembra = self.random.random() < 0.5
+            # Determinar sexo según proporcion_hembras (configurable, por defecto Pf = 0.5)
+            es_hembra = self.random.random() < self.proporcion_hembras
             
             # Posición aleatoria
             pos = (self.random.randrange(self.width),
@@ -792,8 +870,8 @@ class DengueModel(Model):
             Número total de huevos
         """
         for i in range(num_huevos):
-            # Determinar sexo futuro: Pf = 0.5
-            es_hembra = self.random.random() < 0.5
+            # Determinar sexo futuro según proporcion_hembras (configurable, por defecto Pf = 0.5)
+            es_hembra = self.random.random() < self.proporcion_hembras
             
             # Sitio de cría aleatorio
             if self.sitios_cria:
