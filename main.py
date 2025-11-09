@@ -332,6 +332,10 @@ def main():
     
     args = parser.parse_args()
     
+    # Ruta absoluta al archivo CSV de datos climáticos
+    project_dir = Path(__file__).parent
+    climate_csv_path = str(project_dir / 'data' / 'raw' / 'datos_climaticos_2022.csv')
+    
     # Cargar configuración si se especifica
     if args.config:
         cfg = cargar_configuracion(args.config)
@@ -357,7 +361,7 @@ def main():
                 'usar_itn_irs': usar_itn_irs,
                 'seed': seed,
                 'config': cfg,
-                'climate_data_path': 'data/raw/datos_climaticos_2022.csv'
+                'climate_data_path': climate_csv_path
             }
         else:
             # Compatibilidad con esquema legacy
@@ -376,7 +380,7 @@ def main():
                 'usar_itn_irs': control.get('itn_irs', {}).get('activado', args.itn_irs),
                 'seed': args.seed,
                 'config': cfg,
-                'climate_data_path': 'data/raw/datos_climaticos_2022.csv'
+                'climate_data_path': climate_csv_path
             }
     else:
         # Sin archivo: usar CLI o default 365
@@ -390,7 +394,7 @@ def main():
             'usar_itn_irs': args.itn_irs,
             'seed': args.seed,
             'config': None,
-            'climate_data_path': 'data/raw/datos_climaticos_2022.csv'
+            'climate_data_path': climate_csv_path
         }
     
     # Ejecutar simulación

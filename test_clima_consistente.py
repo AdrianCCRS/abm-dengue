@@ -20,6 +20,10 @@ def test_clima_consistente():
     print("TEST: Consistencia de datos climáticos")
     print("=" * 70)
     
+    # Ruta absoluta al CSV
+    project_dir = Path(__file__).parent
+    climate_csv_path = str(project_dir / 'data' / 'raw' / 'datos_climaticos_2022.csv')
+    
     # Parámetros idénticos para ambas simulaciones
     params = {
         'steps': 20,
@@ -29,7 +33,7 @@ def test_clima_consistente():
         'infectados_iniciales': 2,
         'seed': 42,  # Misma semilla
         'verbose': False,
-        'climate_data_path': 'data/raw/datos_climaticos_2022.csv'
+        'climate_data_path': climate_csv_path
     }
     
     print("\n Ejecutando simulación 1...")
