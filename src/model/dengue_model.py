@@ -17,13 +17,13 @@ from mesa.datacollection import DataCollector
 import numpy as np
 from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime, timedelta
-import requests
 
 from ..agents import (
     HumanAgent, MosquitoAgent,
     EstadoSalud, EstadoMosquito, TipoMovilidad, EtapaVida
 )
 from .celda import Celda, TipoCelda
+from ..utils.climate_data import ClimateDataLoader
 
 
 class DengueModel(Model):
@@ -33,7 +33,7 @@ class DengueModel(Model):
     Simula la dinámica de transmisión del dengue en Bucaramanga con:
     - Población humana con estados SEIR y movilidad diferenciada
     - Población de mosquitos con estados SI y ciclo de vida completo
-    - Clima dinámico (temperatura y precipitación vía Meteostat)
+    - Clima dinámico (temperatura y precipitación desde datos históricos CSV)
     - Estrategias de control: LSM (control larvario) e ITN/IRS (camas/insecticidas)
     - Grid espacial 50×50 sin GIS
     
@@ -59,6 +59,8 @@ class DengueModel(Model):
         Activar estrategia ITN/IRS (camas/insecticidas)
     fecha_inicio : datetime, default=datetime(2024, 1, 1)
         Fecha de inicio de simulación (para clima)
+    climate_data_path : str, optional
+        Ruta al archivo CSV con datos climáticos históricos
     seed : Optional[int], default=None
         Semilla para reproducibilidad
         
@@ -78,6 +80,8 @@ class DengueModel(Model):
         Fecha simulada actual
     dia_simulacion : int
         Contador de días transcurridos
+    climate_loader : ClimateDataLoader, optional
+        Cargador de datos climáticos desde CSV
     """
     
     def __init__(
@@ -92,6 +96,7 @@ class DengueModel(Model):
         usar_lsm: bool = False,
         usar_itn_irs: bool = False,
         fecha_inicio: datetime = datetime(2024, 1, 1),
+        climate_data_path: Optional[str] = None,
         seed: Optional[int] = None,
         config: Optional[Dict[str, Any]] = None,
         config_file: Optional[str] = None
@@ -104,6 +109,10 @@ class DengueModel(Model):
         self.num_humanos = num_humanos
         self.num_mosquitos = num_mosquitos
         self.num_huevos = num_huevos
+        
+        # Inicializar variables de clima (antes de cargar configuración)
+        self.climate_loader = None
+        self.use_csv_climate = False
         
         # Cargar configuración desde archivo si se proporciona
         if config_file:
@@ -135,6 +144,24 @@ class DengueModel(Model):
         self.dia_simulacion = 0
         self.temperatura_actual = 25.0  # °C (valor inicial)
         self.precipitacion_actual = 0.0  # mm (valor inicial)
+        
+        # Cargar datos climáticos desde CSV si se proporciona la ruta directamente
+        # (esto sobreescribe cualquier configuración previa del archivo de config)
+        if climate_data_path:
+            try:
+                self.climate_loader = ClimateDataLoader(climate_data_path)
+                self.use_csv_climate = True
+                # Validar que la fecha de inicio esté en el rango de datos
+                if not self.climate_loader.has_date(fecha_inicio):
+                    date_min, date_max = self.climate_loader.get_date_range()
+                    print(f"Advertencia: La fecha de inicio {fecha_inicio.date()} no está en el rango "
+                          f"de datos disponibles ({date_min.date()} a {date_max.date()}). "
+                          f"Se usará modelo sintético.")
+                    self.use_csv_climate = False
+            except Exception as e:
+                print(f"Error al cargar datos climáticos desde CSV: {e}")
+                print("Se usará modelo sintético de clima.")
+                self.use_csv_climate = False
         
         # Estrategias de control
         self.usar_lsm = usar_lsm
@@ -312,6 +339,18 @@ class DengueModel(Model):
         self.lluvia_min_mm = synthetic_climate.get('rain_min_mm', 5.0)
         self.lluvia_max_mm = synthetic_climate.get('rain_max_mm', 50.0)
         
+        # Configuración de datos climáticos desde CSV
+        climate_config = config.get('climate', {})
+        if climate_config.get('use_csv', False) and not self.climate_loader:
+            csv_path = climate_config.get('csv_path')
+            if csv_path:
+                try:
+                    self.climate_loader = ClimateDataLoader(csv_path)
+                    self.use_csv_climate = True
+                except Exception as e:
+                    print(f"Error al cargar datos climáticos desde configuración: {e}")
+                    self.use_csv_climate = False
+        
         # Parámetros de control LSM
         control = config.get('control', {})
         lsm = control.get('lsm', {})
@@ -452,42 +491,30 @@ class DengueModel(Model):
         Actualiza temperatura y precipitación diarias.
         
         Opciones:
-        1. Datos reales: API de Meteostat (requiere conexión)
+        1. Datos reales: Desde archivo CSV con datos históricos
         2. Fallback: Modelo sintético basado en promedios de Bucaramanga
         
         Bucaramanga:
         - Temperatura promedio: 22-24°C
         - Precipitación: variable según época (seca vs lluviosa)
         """
-        try:
-            # Intentar obtener datos reales de Meteostat
-            temp, precip = self._obtener_clima_meteostat()
-            self.temperatura_actual = temp
-            self.precipitacion_actual = precip
-        except Exception:
-            # Fallback: modelo sintético
+        if self.use_csv_climate and self.climate_loader:
+            try:
+                # Obtener datos desde CSV
+                temp, precip = self.climate_loader.get_climate_data(self.fecha_actual)
+                self.temperatura_actual = temp
+                self.precipitacion_actual = precip
+            except KeyError:
+                # Si no hay datos para esta fecha, usar modelo sintético
+                print(f"Advertencia: No hay datos climáticos para {self.fecha_actual.date()}. "
+                      f"Usando modelo sintético.")
+                self.temperatura_actual = self._generar_temperatura_sintetica()
+                self.precipitacion_actual = self._generar_precipitacion_sintetica()
+        else:
+            # Modelo sintético
             self.temperatura_actual = self._generar_temperatura_sintetica()
             self.precipitacion_actual = self._generar_precipitacion_sintetica()
     
-    def _obtener_clima_meteostat(self) -> Tuple[float, float]:
-        """
-        Obtiene datos climáticos reales vía Meteostat API.
-        
-        Bucaramanga: lat=7.1254, lon=-73.1198
-        
-        Returns
-        -------
-        Tuple[float, float]
-            (temperatura en °C, precipitación en mm)
-            
-        Raises
-        ------
-        Exception
-            Si falla la conexión o no hay datos
-        """
-        # TODO: Implementar conexión real con Meteostat
-        # Por ahora lanzar excepción para usar modelo sintético
-        raise Exception("Meteostat no implementado aún")
     
     def _generar_temperatura_sintetica(self) -> float:
         """

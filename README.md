@@ -89,7 +89,7 @@ Construir un modelo de simulación basado en agentes que ilustre la propagación
 
 ## Fuentes de Datos
 
-- **Clima:** API Meteostat (temperatura y precipitación)
+- **Clima:** Datos históricos climáticos desde CSV (temperatura y precipitación)
 - **Epidemiología:** Datos Abiertos Colombia – Casos de dengue
 - **Demografía:** Proyecciones oficiales de población urbana
 

@@ -189,5 +189,5 @@ Grid:
 
 - Jindal, A., & Rao, S. (2017). Agent-Based Modeling and Simulation of Mosquito-Borne Disease Transmission. *Simulation Series*, 49(4).
 - Adaptación para Bucaramanga, Colombia (2025)
-- Datos climáticos: API Meteostat
+- Datos climáticos: CSV con datos históricos de temperatura y precipitación
 - Datos epidemiológicos: Datos Abiertos Colombia

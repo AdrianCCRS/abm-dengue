@@ -34,7 +34,7 @@ amb-dengue/
 │   │
 │   └── 📂 utils/                  # Utilidades
 │       ├── __init__.py
-│       ├── climate_data.py        # API Meteostat (por crear)
+│       ├── climate_data.py        # Cargador de datos climáticos desde CSV
 │       ├── epidemiology_data.py   # Datos dengue (por crear)
 │       ├── visualization.py       # Gráficas (por crear)
 │       └── config_loader.py       # Cargar YAML (por crear)
@@ -118,7 +118,7 @@ DengueModel (mesa.Model)
 
 | Fuente | API/Dataset | Datos |
 |--------|------------|-------|
-| Clima | Meteostat | Temperatura, precipitación diaria |
+| Clima | CSV histórico | Temperatura, precipitación diaria |
 | Epidemiología | Datos Abiertos Colombia | Casos de dengue en Bucaramanga |
 | Demografía | Proyecciones oficiales | Población urbana por sector |
 
@@ -221,7 +221,7 @@ Construir un modelo ABM que ilustre la propagación del dengue en Bucaramanga, i
 - **Mesa** (framework ABM)
 - **NumPy, Pandas** (procesamiento)
 - **Matplotlib, Seaborn** (visualización)
-- **Meteostat** (datos climáticos)
+- **Datos climáticos históricos** (desde CSV)
 - **R** (análisis estadístico)
 - **Jupyter** (notebooks interactivos)
 

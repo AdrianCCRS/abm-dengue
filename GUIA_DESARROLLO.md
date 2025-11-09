@@ -189,7 +189,7 @@ class ITNIRSStrategy:
 ### Paso 5.1: Módulo de Clima (`src/utils/climate_data.py`)
 
 **Tareas:**
-- [ ] Implementar conexión a API Meteostat
+- [x] Implementar cargador de datos climáticos desde CSV
 - [ ] Implementar método `get_temperature(date)` para Bucaramanga
 - [ ] Implementar método `get_precipitation(date)`
 - [ ] Implementar cache local de datos climáticos
@@ -362,7 +362,6 @@ Uso:
 ### Referencias Bibliográficas
 - Jindal et al. (2017) - Modelo ABM para dengue (referencia base)
 - Documentación oficial de Mesa: https://mesa.readthedocs.io/
-- API Meteostat: https://dev.meteostat.net/
 - Datos Abiertos Colombia: https://www.datos.gov.co/
 
 ### Contacto y Soporte

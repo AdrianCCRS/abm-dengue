@@ -38,7 +38,7 @@ Sigue este orden para implementar el proyecto de manera incremental y probarlo e
 8. ⬜ Probar simulación sin clima ni control
 
 ### **Semana 4: Datos Reales**
-9. ⬜ Implementar `src/utils/climate_data.py` (API Meteostat)
+9. ✅ Implementar `src/utils/climate_data.py` (Cargador de datos climáticos desde CSV)
 10. ⬜ Implementar `src/utils/epidemiology_data.py` (datos abiertos)
 11. ⬜ Integrar clima al modelo
 12. ⬜ Crear notebook `notebooks/01_exploracion_datos.ipynb`

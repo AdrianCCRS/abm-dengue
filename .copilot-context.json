@@ -38,7 +38,7 @@
       "Recolectar métricas de interés (infectados, mosquitos, duración del brote)."
     ],
     "data_sources": {
-      "climate": "API Meteostat (temperatura y precipitación diarias en Bucaramanga).",
+      "climate": "Datos climáticos históricos desde archivo CSV (temperatura y precipitación diarias en Bucaramanga).",
       "epidemiology": "Datos Abiertos Colombia – Casos de dengue en Bucaramanga.",
       "demography": "Proyecciones oficiales de población urbana por sector."
     },
