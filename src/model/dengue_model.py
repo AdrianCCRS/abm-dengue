@@ -110,9 +110,8 @@ class DengueModel(Model):
         self.num_mosquitos = num_mosquitos
         self.num_huevos = num_huevos
         
-        # Inicializar variables de clima (antes de cargar configuración)
+        # Inicializar variable de cargador de clima (antes de cargar configuración)
         self.climate_loader = None
-        self.use_csv_climate = False
         
         # Cargar configuración desde archivo si se proporciona
         if config_file:
@@ -145,23 +144,33 @@ class DengueModel(Model):
         self.temperatura_actual = 25.0  # °C (valor inicial)
         self.precipitacion_actual = 0.0  # mm (valor inicial)
         
-        # Cargar datos climáticos desde CSV si se proporciona la ruta directamente
-        # (esto sobreescribe cualquier configuración previa del archivo de config)
-        if climate_data_path:
-            try:
-                self.climate_loader = ClimateDataLoader(climate_data_path)
-                self.use_csv_climate = True
-                # Validar que la fecha de inicio esté en el rango de datos
-                if not self.climate_loader.has_date(fecha_inicio):
-                    date_min, date_max = self.climate_loader.get_date_range()
-                    print(f"Advertencia: La fecha de inicio {fecha_inicio.date()} no está en el rango "
-                          f"de datos disponibles ({date_min.date()} a {date_max.date()}). "
-                          f"Se usará modelo sintético.")
-                    self.use_csv_climate = False
-            except Exception as e:
-                print(f"Error al cargar datos climáticos desde CSV: {e}")
-                print("Se usará modelo sintético de clima.")
-                self.use_csv_climate = False
+        # Cargar datos climáticos desde CSV (OBLIGATORIO)
+        if not climate_data_path:
+            raise ValueError(
+                "Debe proporcionar climate_data_path al crear el modelo. "
+                "El modelo solo funciona con datos climáticos reales desde CSV."
+            )
+        
+        try:
+            self.climate_loader = ClimateDataLoader(climate_data_path)
+            
+            # Validar que la fecha de inicio esté en el rango de datos
+            if not self.climate_loader.has_date(fecha_inicio):
+                date_min, date_max = self.climate_loader.get_date_range()
+                raise ValueError(
+                    f"La fecha de inicio {fecha_inicio.date()} no está en el rango "
+                    f"de datos disponibles ({date_min.date()} a {date_max.date()}). "
+                    f"Por favor, ajuste fecha_inicio para que esté dentro de este rango."
+                )
+            
+            print(f"✓ Datos climáticos cargados desde: {climate_data_path}")
+            date_min, date_max = self.climate_loader.get_date_range()
+            print(f"  Rango de fechas: {date_min.date()} a {date_max.date()}")
+            
+        except Exception as e:
+            raise RuntimeError(
+                f"Error al cargar datos climáticos desde '{climate_data_path}': {e}"
+            )
         
         # Estrategias de control
         self.usar_lsm = usar_lsm
@@ -333,24 +342,6 @@ class DengueModel(Model):
         mosquito_flight = environment.get('mosquito_flight', {})
         self.rango_vuelo_max = mosquito_flight.get('max_range', 10)
         
-        # Parámetros de clima sintético
-        synthetic_climate = environment.get('synthetic_climate', {})
-        self.prob_lluvia = synthetic_climate.get('rain_probability', 0.3)
-        self.lluvia_min_mm = synthetic_climate.get('rain_min_mm', 5.0)
-        self.lluvia_max_mm = synthetic_climate.get('rain_max_mm', 50.0)
-        
-        # Configuración de datos climáticos desde CSV
-        climate_config = config.get('climate', {})
-        if climate_config.get('use_csv', False) and not self.climate_loader:
-            csv_path = climate_config.get('csv_path')
-            if csv_path:
-                try:
-                    self.climate_loader = ClimateDataLoader(csv_path)
-                    self.use_csv_climate = True
-                except Exception as e:
-                    print(f"Error al cargar datos climáticos desde configuración: {e}")
-                    self.use_csv_climate = False
-        
         # Parámetros de control LSM
         control = config.get('control', {})
         lsm = control.get('lsm', {})
@@ -435,11 +426,6 @@ class DengueModel(Model):
         # Parámetros de vuelo de mosquitos
         self.rango_vuelo_max = 10  # ~350m si celda=35m
         
-        # Parámetros de clima sintético
-        self.prob_lluvia = 0.3  # 30% probabilidad de lluvia
-        self.lluvia_min_mm = 5.0
-        self.lluvia_max_mm = 50.0
-        
         # Parámetros de control LSM
         self.lsm_frecuencia_dias = 7
         self.lsm_cobertura = 0.7
@@ -488,75 +474,34 @@ class DengueModel(Model):
     
     def _actualizar_clima(self):
         """
-        Actualiza temperatura y precipitación diarias.
+        Actualiza temperatura y precipitación diarias desde el archivo CSV.
         
-        Opciones:
-        1. Datos reales: Desde archivo CSV con datos históricos
-        2. Fallback: Modelo sintético basado en promedios de Bucaramanga
+        Este método requiere que climate_loader esté configurado correctamente.
+        Si no hay datos disponibles para la fecha actual, lanza un error.
         
-        Bucaramanga:
-        - Temperatura promedio: 22-24°C
-        - Precipitación: variable según época (seca vs lluviosa)
+        Raises
+        ------
+        ValueError
+            Si no se ha configurado el cargador de datos climáticos
+        KeyError
+            Si no hay datos para la fecha actual
         """
-        if self.use_csv_climate and self.climate_loader:
-            try:
-                # Obtener datos desde CSV
-                temp, precip = self.climate_loader.get_climate_data(self.fecha_actual)
-                self.temperatura_actual = temp
-                self.precipitacion_actual = precip
-            except KeyError:
-                # Si no hay datos para esta fecha, usar modelo sintético
-                print(f"Advertencia: No hay datos climáticos para {self.fecha_actual.date()}. "
-                      f"Usando modelo sintético.")
-                self.temperatura_actual = self._generar_temperatura_sintetica()
-                self.precipitacion_actual = self._generar_precipitacion_sintetica()
-        else:
-            # Modelo sintético
-            self.temperatura_actual = self._generar_temperatura_sintetica()
-            self.precipitacion_actual = self._generar_precipitacion_sintetica()
-    
-    
-    def _generar_temperatura_sintetica(self) -> float:
-        """
-        Genera temperatura sintética para Bucaramanga.
+        if not self.climate_loader:
+            raise ValueError(
+                "No se ha configurado el cargador de datos climáticos. "
+                "Debe proporcionar climate_data_path al crear el modelo."
+            )
         
-        Modelo simple:
-        - Base: 23°C
-        - Variación diaria: ±3°C
-        - Ruido: ±1°C
-        
-        Returns
-        -------
-        float
-            Temperatura en °C
-        """
-        # Variación estacional (simplificada: sinusoidal anual)
-        dia_anio = self.dia_simulacion % 365
-        variacion_estacional = 2 * np.sin(2 * np.pi * dia_anio / 365)
-        
-        # Ruido aleatorio
-        ruido = self.random.gauss(0, 1)
-        
-        # Temperatura final
-        temp = 23.0 + variacion_estacional + ruido
-        return max(15, min(35, temp))  # Limitar a rango realista
-    
-    def _generar_precipitacion_sintetica(self) -> float:
-        """
-        Genera precipitación sintética para Bucaramanga.
-        
-        Modelo simple (configurable desde environment.synthetic_climate):
-        - Probabilidad de lluvia: prob_lluvia (por defecto 0.3)
-        - Cantidad si llueve: lluvia_min_mm a lluvia_max_mm (por defecto 5-50mm)
-        
-        Returns
-        -------
-        float
-            Precipitación en mm
-        """
-        if self.random.random() < self.prob_lluvia:
-            return self.random.uniform(self.lluvia_min_mm, self.lluvia_max_mm)
-        return 0.0
+        try:
+            # Obtener datos desde CSV
+            temp, precip = self.climate_loader.get_climate_data(self.fecha_actual)
+            self.temperatura_actual = temp
+            self.precipitacion_actual = precip
+        except KeyError:
+            raise KeyError(
+                f"No hay datos climáticos disponibles para la fecha {self.fecha_actual.date()}. "
+                f"Verifique que la fecha esté dentro del rango del archivo CSV."
+            )
     
     def _aplicar_control(self):
         """
