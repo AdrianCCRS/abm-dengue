@@ -147,9 +147,7 @@ class HumanAgent(Agent):
         - I → R: Después de duracion_infectado días
         - R → S: Probabilidad Prc = 0 (inmunidad permanente en este modelo)
         """
-        # Solo incrementar días si está en un estado temporal (E o I)
-        if self.estado in (EstadoSalud.EXPUESTO, EstadoSalud.INFECTADO):
-            self.dias_en_estado += 1
+        self.dias_en_estado += 1
         
         if self.estado == EstadoSalud.EXPUESTO:
             if self.dias_en_estado >= self.duracion_expuesto:

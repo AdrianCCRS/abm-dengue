@@ -99,6 +99,8 @@ class MosquitoAgent(Agent):
         self.ha_picado_hoy = False
         self.esta_apareado = False if es_hembra else True  # Machos siempre "listos"
         self.sitio_cria = sitio_cria
+        self.dias_desde_ultima_puesta = 0  # Control de cooldown de reproducción
+        self.dias_cooldown_reproduccion = 3  # Mínimo 3 días entre puestas (ciclo gonotrófico)
         
         # Parámetros desde configuración del modelo (cacheados para rendimiento)
         self.tasa_mortalidad = model.mortalidad_mosquito
@@ -188,6 +190,10 @@ class MosquitoAgent(Agent):
         """
         self.edad += 1
         self.ha_picado_hoy = False
+        
+        # Incrementar cooldown de reproducción
+        if self.dias_desde_ultima_puesta < self.dias_cooldown_reproduccion:
+            self.dias_desde_ultima_puesta += 1
         
         # 1. Mortalidad diaria (usar parámetro del modelo)
         if self.random.random() < self.tasa_mortalidad:
@@ -377,10 +383,15 @@ class MosquitoAgent(Agent):
         - Haber picado (ingesta de sangre)
         - Encontrar sitio de cría activo
         - Condiciones climáticas favorables (precipitación >= umbral)
+        - Haber pasado el período de cooldown (ciclo gonotrófico ~3 días)
         
         Resultado: huevos_por_hembra (según configuración, por defecto 100)
         Sexo: determinado por female_ratio (por defecto Pf = 0.5)
         """
+        # Verificar cooldown (ciclo gonotrófico: tiempo entre puestas)
+        if self.dias_desde_ultima_puesta < self.dias_cooldown_reproduccion:
+            return
+        
         # Verificar precipitación (necesaria para sitios de cría activos)
         precipitacion = self.model.precipitacion_actual if hasattr(self.model, 'precipitacion_actual') else 0
         
@@ -415,7 +426,8 @@ class MosquitoAgent(Agent):
         
         # Resetear estado reproductivo
         self.ha_picado_hoy = False
-        # Nota: hembra puede volver a reproducir en próximo ciclo
+        self.dias_desde_ultima_puesta = 0  # Reiniciar cooldown
+        # Nota: hembra puede volver a reproducir después del cooldown
     
     def _calcular_dias_maduracion(self, temperatura: float) -> int:
         """
