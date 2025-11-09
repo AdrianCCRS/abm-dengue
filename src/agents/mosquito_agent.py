@@ -153,6 +153,13 @@ class MosquitoAgent(Agent):
         """
         temperatura = self.model.temperatura_actual
         duracion_dias = self.dias_base_desarrollo_huevo + abs(temperatura - self.temp_optima_desarrollo_huevo) * self.sensibilidad_temp_desarrollo_huevo
+        
+        # Incrementar días como huevo
+        self.dias_como_huevo += 1
+        
+        # Verificar si debe eclosionar
+        if self.dias_como_huevo >= duracion_dias:
+            self.eclosionar()
     
     def eclosionar(self):
         """
