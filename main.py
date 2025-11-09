@@ -17,6 +17,7 @@ import yaml
 import sys
 from pathlib import Path
 from datetime import datetime
+from typing import Optional
 import pandas as pd
 import matplotlib.pyplot as plt
 
@@ -72,7 +73,7 @@ def ejecutar_simulacion(
     usar_itn_irs: bool = False,
     seed: int = None,
     verbose: bool = True,
-    config: dict | None = None
+    config: Optional[dict] = None
 ) -> DengueModel:
     """
     Ejecuta la simulación del modelo ABM del Dengue.
