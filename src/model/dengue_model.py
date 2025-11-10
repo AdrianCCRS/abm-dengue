@@ -314,6 +314,11 @@ class DengueModel(Model):
         self.egg_to_adult_temp_optimal = breeding.get('egg_to_adult_temp_optimal', 25.0)
         self.egg_to_adult_temp_sensitivity = breeding.get('egg_to_adult_temp_sensitivity', 1.0)
         
+        # Alias para compatibilidad con MosquitoAgent
+        self.dias_base_desarrollo_huevo = self.egg_to_adult_base_days
+        self.temp_optima_desarrollo_huevo = self.egg_to_adult_temp_optimal
+        self.sensibilidad_temp_desarrollo_huevo = self.egg_to_adult_temp_sensitivity
+        
         self.rainfall_threshold = breeding.get('rainfall_threshold', 0.0)
         self.breeding_site_ratio = breeding.get('breeding_site_ratio', 0.2)
         
@@ -402,6 +407,11 @@ class DengueModel(Model):
         self.egg_to_adult_base_days = 8
         self.egg_to_adult_temp_optimal = 25.0
         self.egg_to_adult_temp_sensitivity = 1.0
+        
+        # Alias para compatibilidad con MosquitoAgent
+        self.dias_base_desarrollo_huevo = self.egg_to_adult_base_days
+        self.temp_optima_desarrollo_huevo = self.egg_to_adult_temp_optimal
+        self.sensibilidad_temp_desarrollo_huevo = self.egg_to_adult_temp_sensitivity
         
         self.rainfall_threshold = 0.0
         self.breeding_site_ratio = 0.2
