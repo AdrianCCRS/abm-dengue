@@ -143,8 +143,8 @@ park_probability_worker: 0.4
 ### 7. Clima (climate)
 ```yaml
 climate:
-  use_api: true                    # Usar API de Meteostat (false = sintético)
-  api_name: "meteostat"
+  use_csv: true                    # Usar datos climáticos desde CSV
+  csv_path: "data/raw/datos_climaticos_2022.csv"  # Ruta al archivo CSV
   location:
     latitude: 7.1193               # Bucaramanga
     longitude: -73.1227

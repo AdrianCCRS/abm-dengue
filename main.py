@@ -17,6 +17,7 @@ import yaml
 import sys
 from pathlib import Path
 from datetime import datetime
+from typing import Optional
 import pandas as pd
 import matplotlib.pyplot as plt
 
@@ -72,7 +73,8 @@ def ejecutar_simulacion(
     usar_itn_irs: bool = False,
     seed: int = None,
     verbose: bool = True,
-    config: dict | None = None
+    config: Optional[dict] = None,
+    climate_data_path: Optional[str] = None
 ) -> DengueModel:
     """
     Ejecuta la simulación del modelo ABM del Dengue.
@@ -103,6 +105,10 @@ def ejecutar_simulacion(
         Semilla para reproducibilidad
     verbose : bool, default=True
         Mostrar progreso en consola
+    config : dict, optional
+        Diccionario de configuración completo del modelo
+    climate_data_path : str, optional
+        Ruta al archivo CSV con datos climáticos históricos
         
     Returns
     -------
@@ -136,9 +142,10 @@ def ejecutar_simulacion(
         mosquitos_infectados_iniciales=mosquitos_infectados_iniciales,
         usar_lsm=usar_lsm,
         usar_itn_irs=usar_itn_irs,
-        fecha_inicio=datetime.now(),
+        fecha_inicio=datetime(2022, 1, 1),  # Usar fecha dentro del rango de datos del CSV
         seed=seed,
-        config=config
+        config=config,
+        climate_data_path=climate_data_path
     )
     
     # Ejecutar simulación
@@ -325,6 +332,10 @@ def main():
     
     args = parser.parse_args()
     
+    # Ruta absoluta al archivo CSV de datos climáticos
+    project_dir = Path(__file__).parent
+    climate_csv_path = str(project_dir / 'data' / 'raw' / 'datos_climaticos_2022.csv')
+    
     # Cargar configuración si se especifica
     if args.config:
         cfg = cargar_configuracion(args.config)
@@ -349,7 +360,8 @@ def main():
                 'usar_lsm': usar_lsm,
                 'usar_itn_irs': usar_itn_irs,
                 'seed': seed,
-                'config': cfg
+                'config': cfg,
+                'climate_data_path': climate_csv_path
             }
         else:
             # Compatibilidad con esquema legacy
@@ -367,7 +379,8 @@ def main():
                 'usar_lsm': control.get('lsm', {}).get('activado', args.lsm),
                 'usar_itn_irs': control.get('itn_irs', {}).get('activado', args.itn_irs),
                 'seed': args.seed,
-                'config': cfg
+                'config': cfg,
+                'climate_data_path': climate_csv_path
             }
     else:
         # Sin archivo: usar CLI o default 365
@@ -380,7 +393,8 @@ def main():
             'usar_lsm': args.lsm,
             'usar_itn_irs': args.itn_irs,
             'seed': args.seed,
-            'config': None
+            'config': None,
+            'climate_data_path': climate_csv_path
         }
     
     # Ejecutar simulación

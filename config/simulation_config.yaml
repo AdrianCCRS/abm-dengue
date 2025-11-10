@@ -1,4 +1,5 @@
 # Configuración de la Simulación ABM-Dengue Bucaramanga
+# Parámetros basados en el documento: "Parámetros de Inicialización del Modelo: Valores Propuestos y Justificación"
 
 # Parámetros del Modelo
 model:
@@ -16,11 +17,12 @@ population:
   initial_infected_mosquitoes: 5
   
   # Distribución de tipos de movilidad humana (deben sumar 1.0)
+  # Basado en estructura demográfica de Colombia
   mobility_distribution:
-    student: 0.25        # 25% estudiantes (Tipo 1)
-    worker: 0.35         # 35% trabajadores (Tipo 2)
-    mobile: 0.25         # 25% móviles continuos (Tipo 3)
-    stationary: 0.15     # 15% estacionarios (Tipo 4)
+    student: 0.25        # 25% estudiantes (población escolar)
+    worker: 0.35         # 35% trabajadores (empleados formales)
+    mobile: 0.25         # 25% móviles (trabajadores informales, desempleados)
+    stationary: 0.15     # 15% estacionarios (amas de casa, ancianos)
 
 # Parámetros SEIR (Humanos)
 human_disease:
@@ -33,15 +35,15 @@ human_disease:
 # Parámetros SI (Mosquitos)
 mosquito_disease:
   incubation_period: 10.0      # días de incubación extrínseca (no usado en modelo SI simple)
-  mortality_rate: 0.05         # Mr = 0.05 por día (tasa de mortalidad diaria)
+  mortality_rate: 0.05         # Mr = 0.05 por día - Vida media ~20 días (conservador, laboratorio)
   lifespan_mean: 20.0          # días (vida promedio, 1/mortality_rate)
   lifespan_std: 5.0            # desviación estándar
-  sensory_range: 3             # Sr = 3 celdas (rango de detección de humanos)
+  sensory_range: 3             # Sr = 3 metros (rango de detección de humanos) - Calibrado epidemiológicamente
   
 # Transmisión
 transmission:
-  mosquito_to_human_prob: 0.6   # α = 0.6 (probabilidad de transmisión M→H)
-  human_to_mosquito_prob: 0.275 # β = 0.275 (probabilidad de transmisión H→M)
+  mosquito_to_human_prob: 0.6   # α = 0.6 - Competencia vectorial alta de Ae. aegypti
+  human_to_mosquito_prob: 0.275 # β = 0.275 - Viremia humana y susceptibilidad del mosquito
   biting_rate: 1.0              # picaduras por mosquito hembra por día
   contact_radius: 1             # radio de contacto en celdas (misma celda = 0)
 
@@ -51,62 +53,64 @@ mobility:
   work_probability: 0.7         # probabilidad de ir al trabajo
   
   # Probabilidades de visita a parque según tipo de agente
-  park_probability_student: 0.3      # estudiantes tienen mayor tendencia a ir a parques
-  park_probability_worker: 0.1       # trabajadores visitan menos los parques
-  park_probability_mobile: 0.15      # móviles continuos probabilidad intermedia
-  park_probability_stationary: 0.05  # estacionarios rara vez salen
+  # Basadas en patrones de uso de espacio público urbano
+  park_probability_student: 0.3      # estudiantes van más al parque (después de clases)
+  park_probability_worker: 0.1       # trabajadores tienen menos tiempo libre
+  park_probability_mobile: 0.15      # móviles: probabilidad intermedia
+  park_probability_stationary: 0.05  # estacionarios rara vez salen de casa
   
   # Horarios de actividad (horas del día)
-  school_start_hour: 7          # hora de entrada a escuela
-  school_end_hour: 15           # hora de salida de escuela (3 PM)
-  work_start_hour: 7            # hora de entrada al trabajo
-  work_end_hour: 17             # hora de salida del trabajo (5 PM)
-  park_start_hour: 16           # ventana de visita a parque inicio (4 PM)
-  park_end_hour: 19             # ventana de visita a parque fin (7 PM)
+  # Basados en jornadas típicas en Colombia
+  school_start_hour: 7          # hora de entrada a escuela (7:00 AM)
+  school_end_hour: 15           # hora de salida de escuela (3:00 PM)
+  work_start_hour: 7            # hora de entrada al trabajo (7:00 AM)
+  work_end_hour: 17             # hora de salida del trabajo (5:00 PM)
+  park_start_hour: 16           # inicio de visitas al parque (4:00 PM - temperaturas más frescas)
+  park_end_hour: 19             # fin de visitas al parque (7:00 PM)
   
-  # Movilidad continua (Tipo 3)
-  mobile_move_interval_hours: 2      # cada cuántas horas cambia de ubicación
-  mobile_active_start_hour: 7        # hora inicio de movilidad activa
-  mobile_active_end_hour: 19         # hora fin de movilidad activa (7 PM)
+  # Movilidad continua (Tipo 3 - móviles)
+  mobile_move_interval_hours: 2      # cada 2 horas cambian de ubicación (trabajadores informales)
+  mobile_active_start_hour: 7        # hora inicio de movilidad activa (7:00 AM)
+  mobile_active_end_hour: 19         # hora fin de movilidad activa (7:00 PM)
   
   home_return_probability: 0.9  # probabilidad de regresar a casa
 
-# Clima (valores por defecto si no hay API)
+# Clima (valores por defecto si no hay datos desde CSV)
 climate:
-  use_api: true
-  api_name: "meteostat"
-  location:
-    latitude: 7.1193
-    longitude: -73.1227
-  default_temperature: 24.0  # °C
-  default_precipitation: 3.0 # mm
-  temperature_effect_on_breeding: true
-  rain_effect_on_breeding: true
+  use_csv: true                      # Usar datos climáticos reales desde archivo CSV
+  csv_path: "data/raw/datos_climaticos_2022.csv"  # Ruta al archivo con datos de Bucaramanga 2022
+  default_temperature: 24.0          # °C (valor de respaldo si falta dato en CSV)
+  default_precipitation: 3.0         # mm (valor de respaldo si falta dato en CSV)
+  temperature_effect_on_breeding: true  # Activar dependencia temperatura → reproducción
+  rain_effect_on_breeding: true         # Activar dependencia lluvia → sitios de cría
 
 # Entorno (Estructura Espacial)
 environment:
-  # Distribución de tipos de celdas (deben considerar el total del grid)
+  # Distribución de tipos de celdas
+  # Basada en características urbanas de Bucaramanga
   cell_types:
-    water_ratio: 0.05      # 5% celdas tipo AGUA (criaderos permanentes: lagos, estanques)
-    park_ratio: 0.10       # 10% celdas tipo PARQUE (zonas recreativas, alta exposición)
+    water_ratio: 0.05      # 5% celdas tipo AGUA - Cuerpos de agua permanentes (lagos, estanques)
+    park_ratio: 0.10       # 10% celdas tipo PARQUE - Zonas recreativas (Bucaramanga, "Ciudad de Parques")
     urban_ratio: 0.85      # 85% celdas tipo URBANA (viviendas, oficinas, escuelas)
   
   # Tamaño de zonas (clusters contiguos)
+  # Simula características geográficas realistas
   zone_sizes:
-    water_min: 2           # Tamaño mínimo de cuerpo de agua (2x2 celdas)
-    water_max: 4           # Tamaño máximo de cuerpo de agua (4x4 celdas)
-    park_min: 3            # Tamaño mínimo de parque (3x3 celdas)
-    park_max: 6            # Tamaño máximo de parque (6x6 celdas)
+    water_min: 2           # Tamaño mínimo de cuerpo de agua (2x2 celdas) - Pequeños estanques
+    water_max: 4           # Tamaño máximo de cuerpo de agua (4x4 celdas) - Lagos medianos
+    park_min: 3            # Tamaño mínimo de parque (3x3 celdas) - Parques vecinales
+    park_max: 6            # Tamaño máximo de parque (6x6 celdas) - Parques principales
   
   # Parámetros de vuelo de mosquitos
   mosquito_flight:
-    max_range: 10          # celdas máximas de vuelo (~350m si celda=35m)
+    max_range: 10          # celdas máximas de vuelo (~10 celdas = baja dispersión de Ae. aegypti)
 
 # Comportamiento Humano
 human_behavior:
-  # Aislamiento de infectados (Extensión 2)
-  isolation_probability: 0.7           # 70% de infectados se aíslan voluntariamente
-  infected_mobility_radius: 1          # radio de movilidad (celdas) si NO se aísla
+  # Aislamiento de infectados
+  # Basado en síntomas debilitantes del dengue (2-7 días de fase febril)
+  isolation_probability: 0.7           # 70% de infectados se aíslan voluntariamente (estimado de brotes)
+  infected_mobility_radius: 1          # radio de movilidad (celdas) cuando NO se aísla (prácticamente inmóvil)
   
   # Opcional: diferenciar por tipo (descomentar para usar)
   # isolation_by_type:
@@ -117,47 +121,53 @@ human_behavior:
 
 # Estrategias de Control
 control_strategies:
-  # Gestión de Fuentes Larvarias (LSM)
+  # Gestión de Fuentes Larvarias (LSM - Larval Source Management)
+  # Eliminación/tratamiento de contenedores artificiales donde se reproducen los mosquitos
   lsm:
     enabled: false
     start_day: 30
-    coverage: 0.7            # 70% de cobertura
-    effectiveness: 0.8       # 80% de reducción de criaderos
-    frequency_days: 7        # cada 7 días
+    coverage: 0.7            # 70% de cobertura espacial (campañas masivas en barrios)
+    effectiveness: 0.8       # 80% de reducción de criaderos tratados/eliminados
+    frequency_days: 7        # cada 7 días (inspección y tratamiento semanal)
   
-  # Mosquiteros e Insecticidas (ITN/IRS)
+  # Mosquiteros tratados con Insecticida / Rociado Residual (ITN/IRS)
+  # Protección de viviendas contra picaduras de mosquitos
   itn_irs:
     enabled: false
     start_day: 30
-    coverage: 0.6            # 60% de hogares protegidos
-    bite_reduction: 0.7      # 70% de reducción de picaduras
-    duration_days: 90        # duración del efecto
+    coverage: 0.6            # 60% de hogares con intervención (factibilidad logística)
+    bite_reduction: 0.7      # 70% de reducción en probabilidad de picadura
+    duration_days: 90        # duración del efecto residual (~3 meses)
 
 # Reproducción de Mosquitos
 mosquito_breeding:
-  eggs_per_female: 100          # huevos por puesta por hembra
-  mating_probability: 0.6       # Pm = 0.6 (probabilidad de apareamiento exitoso)
-  female_ratio: 0.5             # Pf = 0.5 (proporción de hembras)
+  eggs_per_female: 100          # ~100-150 huevos por puesta (estudios de laboratorio)
+  mating_probability: 0.6       # Pm = 0.6 - Alto éxito de apareamiento en colonias establecidas
+  female_ratio: 0.5             # Pf = 0.5 - Ratio sexual 1:1 típico en Ae. aegypti
   
   # Desarrollo dependiente de temperatura (fórmulas del paper)
-  # Días de maduración del huevo: τ = 3 + |θ - 21| / 5
+  # Maduración del huevo: τ = 3 + |θ - 21| / 5
+  # Eclosión en ~2-3 días a temperaturas favorables (25-30°C)
   egg_maturation_base_days: 3
   egg_maturation_temp_optimal: 21.0
   egg_maturation_temp_sensitivity: 5.0
   
-  # Días de desarrollo huevo-adulto: μ = 8 + |θ - 25|
+  # Desarrollo huevo-adulto: μ = 8 + |θ - 25|
+  # Desarrollo larval completo en ~8 días a 25°C (temperatura óptima)
   egg_to_adult_base_days: 8
   egg_to_adult_temp_optimal: 25.0
   egg_to_adult_temp_sensitivity: 1.0
   
-  # Límites de temperatura para supervivencia
-  temperature_min: 15.0         # °C mínima para desarrollo
-  temperature_opt: 28.0         # °C óptima
-  temperature_max: 35.0         # °C máxima
+  # Límites de temperatura para supervivencia y desarrollo
+  # Basados en biología de Ae. aegypti
+  temperature_min: 15.0         # °C mínima para desarrollo (por debajo, letargo larvario)
+  temperature_opt: 28.0         # °C óptima para desarrollo y reproducción
+  temperature_max: 35.0         # °C máxima (por encima, mortalidad larvaria)
   
   # Precipitación y sitios de cría
-  rainfall_threshold: 0.0       # mm mínimos para activar criaderos (0 = siempre activos)
-  breeding_site_ratio: 0.2      # 20% de celdas tienen sitios de cría potenciales
+  # 0.0 mm: en entornos urbanos, sitios artificiales no dependen de lluvia
+  rainfall_threshold: 0.0       # mm mínimos para activar criaderos (0 = siempre disponibles)
+  breeding_site_ratio: 0.2      # 20% de celdas contienen sitios de cría potenciales
 
 # Recolección de Datos
 data_collection:
