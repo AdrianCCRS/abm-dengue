@@ -35,7 +35,6 @@ class DengueModel(Model):
     - Población de mosquitos con estados SI y ciclo de vida completo
     - Clima dinámico (temperatura y precipitación desde datos históricos CSV)
     - Estrategias de control: LSM (control larvario) e ITN/IRS (camas/insecticidas)
-    - Grid espacial 50×50 sin GIS
     
     Parameters
     ----------
@@ -128,7 +127,7 @@ class DengueModel(Model):
             self.random.seed(seed)
             np.random.seed(seed)
         
-        # Grid espacial (50×50, múltiples agentes por celda, sin toroide)
+        # Grid espacial (múltiples agentes por celda, sin toroide)
         self.grid = MultiGrid(width, height, torus=False)
         
         # Scheduler de activación aleatoria
@@ -163,7 +162,7 @@ class DengueModel(Model):
                     f"Por favor, ajuste fecha_inicio para que esté dentro de este rango."
                 )
             
-            print(f"✓ Datos climáticos cargados desde: {climate_data_path}")
+            print(f"Datos climáticos cargados desde: {climate_data_path}")
             date_min, date_max = self.climate_loader.get_date_range()
             print(f"  Rango de fechas: {date_min.date()} a {date_max.date()}")
             
@@ -269,176 +268,176 @@ class DengueModel(Model):
         """
         # Parámetros de enfermedad humana (SEIR)
         human_disease = config.get('human_disease', {})
-        self.incubacion_humano = human_disease.get('incubation_period', 5.0)
-        self.infeccioso_humano = human_disease.get('infectious_period', 6.0)
+        self.incubation_period = human_disease.get('incubation_period', 5.0)
+        self.infectious_period = human_disease.get('infectious_period', 6.0)
         
         # Parámetros de enfermedad mosquito (SI)
         mosquito_disease = config.get('mosquito_disease', {})
-        self.mortalidad_mosquito = mosquito_disease.get('mortality_rate', 0.05)
-        self.rango_sensorial_mosquito = mosquito_disease.get('sensory_range', 3)
+        self.mortality_rate = mosquito_disease.get('mortality_rate', 0.05)
+        self.sensory_range = mosquito_disease.get('sensory_range', 3)
         
         # Parámetros de transmisión
         transmission = config.get('transmission', {})
-        self.prob_transmision_mosquito_humano = transmission.get('mosquito_to_human_prob', 0.6)  # α
-        self.prob_transmision_humano_mosquito = transmission.get('human_to_mosquito_prob', 0.275)  # β
+        self.mosquito_to_human_prob = transmission.get('mosquito_to_human_prob', 0.6)  # α
+        self.human_to_mosquito_prob = transmission.get('human_to_mosquito_prob', 0.275)  # β
         
         # Parámetros de movilidad humana
         mobility = config.get('mobility', {})
-        self.prob_parque_estudiante = mobility.get('park_probability_student', 0.3)
-        self.prob_parque_trabajador = mobility.get('park_probability_worker', 0.1)
-        self.prob_parque_movil = mobility.get('park_probability_mobile', 0.15)
-        self.prob_parque_estacionario = mobility.get('park_probability_stationary', 0.05)
+        self.park_probability_student = mobility.get('park_probability_student', 0.3)
+        self.park_probability_worker = mobility.get('park_probability_worker', 0.1)
+        self.park_probability_mobile = mobility.get('park_probability_mobile', 0.25)
+        self.park_probability_stationary = mobility.get('park_probability_stationary', 0.05)
         
-        self.hora_inicio_escuela = mobility.get('school_start_hour', 7)
-        self.hora_fin_escuela = mobility.get('school_end_hour', 15)
-        self.hora_inicio_trabajo = mobility.get('work_start_hour', 7)
-        self.hora_fin_trabajo = mobility.get('work_end_hour', 17)
-        self.hora_inicio_parque = mobility.get('park_start_hour', 16)
-        self.hora_fin_parque = mobility.get('park_end_hour', 19)
+        self.school_start_hour = mobility.get('school_start_hour', 6)
+        self.school_end_hour = mobility.get('school_end_hour', 14)
+        self.work_start_hour = mobility.get('work_start_hour', 7)
+        self.work_end_hour = mobility.get('work_end_hour', 18)
+        self.park_start_hour = mobility.get('park_start_hour', 16)
+        self.park_end_hour = mobility.get('park_end_hour', 20)
         
-        self.intervalo_movimiento_horas = mobility.get('mobile_move_interval_hours', 2)
-        self.hora_inicio_movil_activo = mobility.get('mobile_active_start_hour', 7)
-        self.hora_fin_movil_activo = mobility.get('mobile_active_end_hour', 19)
+        self.mobile_move_interval_hours = mobility.get('mobile_move_interval_hours', 2)
+        self.mobile_active_start_hour = mobility.get('mobile_active_start_hour', 6)
+        self.mobile_active_end_hour = mobility.get('mobile_active_end_hour', 20)
         
         # Parámetros de reproducción de mosquitos
         breeding = config.get('mosquito_breeding', {})
-        self.huevos_por_hembra = breeding.get('eggs_per_female', 100)
-        self.prob_apareamiento_mosquito = breeding.get('mating_probability', 0.6)
-        self.proporcion_hembras = breeding.get('female_ratio', 0.5)
+        self.eggs_per_female = breeding.get('eggs_per_female', 100)
+        self.mating_probability = breeding.get('mating_probability', 0.6)
+        self.female_ratio = breeding.get('female_ratio', 0.5)
         
         # Desarrollo dependiente de temperatura
-        self.dias_base_maduracion_huevo = breeding.get('egg_maturation_base_days', 3)
-        self.temp_optima_maduracion_huevo = breeding.get('egg_maturation_temp_optimal', 21.0)
-        self.sensibilidad_temp_maduracion_huevo = breeding.get('egg_maturation_temp_sensitivity', 5.0)
+        self.egg_maturation_base_days = breeding.get('egg_maturation_base_days', 3)
+        self.egg_maturation_temp_optimal = breeding.get('egg_maturation_temp_optimal', 21.0)
+        self.egg_maturation_temp_sensitivity = breeding.get('egg_maturation_temp_sensitivity', 5.0)
         
-        self.dias_base_desarrollo_huevo = breeding.get('egg_to_adult_base_days', 8)
-        self.temp_optima_desarrollo_huevo = breeding.get('egg_to_adult_temp_optimal', 25.0)
-        self.sensibilidad_temp_desarrollo_huevo = breeding.get('egg_to_adult_temp_sensitivity', 1.0)
+        self.egg_to_adult_base_days = breeding.get('egg_to_adult_base_days', 8)
+        self.egg_to_adult_temp_optimal = breeding.get('egg_to_adult_temp_optimal', 25.0)
+        self.egg_to_adult_temp_sensitivity = breeding.get('egg_to_adult_temp_sensitivity', 1.0)
         
-        self.umbral_precipitacion_cria = breeding.get('rainfall_threshold', 0.0)
-        self.proporcion_sitios_cria = breeding.get('breeding_site_ratio', 0.2)
+        self.rainfall_threshold = breeding.get('rainfall_threshold', 0.0)
+        self.breeding_site_ratio = breeding.get('breeding_site_ratio', 0.2)
         
         # Distribución de tipos de movilidad
         mobility_dist = config.get('population', {}).get('mobility_distribution', {})
-        self.dist_estudiantes = mobility_dist.get('student', 0.25)
-        self.dist_trabajadores = mobility_dist.get('worker', 0.35)
-        self.dist_moviles = mobility_dist.get('mobile', 0.25)
-        self.dist_estacionarios = mobility_dist.get('stationary', 0.15)
+        self.mobility_distribution_student = mobility_dist.get('student', 0.30)
+        self.mobility_distribution_worker = mobility_dist.get('worker', 0.40)
+        self.mobility_distribution_mobile = mobility_dist.get('mobile', 0.20)
+        self.mobility_distribution_stationary = mobility_dist.get('stationary', 0.10)
         
         # Parámetros del entorno (tipos de celdas)
         environment = config.get('environment', {})
         cell_types = environment.get('cell_types', {})
-        self.proporcion_celdas_agua = cell_types.get('water_ratio', 0.05)
-        self.proporcion_celdas_parques = cell_types.get('park_ratio', 0.10)
+        self.water_ratio = cell_types.get('water_ratio', 0.05)
+        self.park_ratio = cell_types.get('park_ratio', 0.10)
         
         # Tamaños de zonas
         zone_sizes = environment.get('zone_sizes', {})
-        self.agua_min = zone_sizes.get('water_min', 2)
-        self.agua_max = zone_sizes.get('water_max', 4)
-        self.parque_min = zone_sizes.get('park_min', 3)
-        self.parque_max = zone_sizes.get('park_max', 6)
+        self.water_min = zone_sizes.get('water_min', 2)
+        self.water_max = zone_sizes.get('water_max', 4)
+        self.park_min = zone_sizes.get('park_min', 3)
+        self.park_max = zone_sizes.get('park_max', 6)
         
         # Parámetros de vuelo de mosquitos
         mosquito_flight = environment.get('mosquito_flight', {})
-        self.rango_vuelo_max = mosquito_flight.get('max_range', 10)
+        self.max_range = mosquito_flight.get('max_range', 5)
         
         # Parámetros de control LSM
         control = config.get('control', {})
         lsm = control.get('lsm', {})
-        self.lsm_frecuencia_dias = lsm.get('frequency_days', 7)
-        self.lsm_cobertura = lsm.get('coverage', 0.7)
-        self.lsm_efectividad = lsm.get('effectiveness', 0.8)
+        self.lsm_frequency_days = lsm.get('frequency_days', 7)
+        self.lsm_coverage = lsm.get('coverage', 0.7)
+        self.lsm_effectiveness = lsm.get('effectiveness', 0.8)
         
         # Parámetros de control ITN/IRS
         itn_irs = control.get('itn_irs', {})
-        self.itn_irs_duracion_dias = itn_irs.get('duration_days', 90)
-        self.itn_irs_cobertura = itn_irs.get('coverage', 0.6)
-        self.itn_irs_efectividad = itn_irs.get('effectiveness', 0.7)
+        self.itn_irs_duration_days = itn_irs.get('duration_days', 90)
+        self.itn_irs_coverage = itn_irs.get('coverage', 0.6)
+        self.itn_irs_effectiveness = itn_irs.get('effectiveness', 0.7)
         
         # Parámetros de comportamiento humano
         human_behavior = config.get('human_behavior', {})
-        self.prob_aislamiento = human_behavior.get('isolation_probability', 0.7)
-        self.radio_mov_infectado = human_behavior.get('infected_mobility_radius', 1)
+        self.isolation_probability = human_behavior.get('isolation_probability', 0.7)
+        self.infected_mobility_radius = human_behavior.get('infected_mobility_radius', 1)
     
     def _cargar_configuracion_default(self):
         """Carga configuración por defecto si no se proporciona config."""
         # Parámetros de enfermedad humana (SEIR)
-        self.incubacion_humano = 5.0  # Ne = 5 días
-        self.infeccioso_humano = 6.0  # Ni = 6 días
+        self.incubation_period = 5.0  # Ne = 5 días
+        self.infectious_period = 6.0  # Ni = 6 días
         
         # Parámetros de enfermedad mosquito (SI)
-        self.mortalidad_mosquito = 0.05  # Mr = 0.05 por día
-        self.rango_sensorial_mosquito = 3  # Sr = 3 celdas
+        self.mortality_rate = 0.05  # Mr = 0.05 por día
+        self.sensory_range = 3  # Sr = 3 celdas
         
         # Parámetros de transmisión
-        self.prob_transmision_mosquito_humano = 0.6  # α = 0.6
-        self.prob_transmision_humano_mosquito = 0.275  # β = 0.275
+        self.mosquito_to_human_prob = 0.6  # α = 0.6
+        self.human_to_mosquito_prob = 0.275  # β = 0.275
         
         # Parámetros de movilidad humana
-        self.prob_parque_estudiante = 0.3
-        self.prob_parque_trabajador = 0.1
-        self.prob_parque_movil = 0.15
-        self.prob_parque_estacionario = 0.05
+        self.park_probability_student = 0.3
+        self.park_probability_worker = 0.1
+        self.park_probability_mobile = 0.25
+        self.park_probability_stationary = 0.05
         
-        self.hora_inicio_escuela = 7
-        self.hora_fin_escuela = 15
-        self.hora_inicio_trabajo = 7
-        self.hora_fin_trabajo = 17
-        self.hora_inicio_parque = 16
-        self.hora_fin_parque = 19
+        self.school_start_hour = 6
+        self.school_end_hour = 14
+        self.work_start_hour = 7
+        self.work_end_hour = 18
+        self.park_start_hour = 16
+        self.park_end_hour = 20
         
-        self.intervalo_movimiento_horas = 2
-        self.hora_inicio_movil_activo = 7
-        self.hora_fin_movil_activo = 19
+        self.mobile_move_interval_hours = 2
+        self.mobile_active_start_hour = 6
+        self.mobile_active_end_hour = 20
         
         # Parámetros de reproducción de mosquitos
-        self.huevos_por_hembra = 100
-        self.prob_apareamiento_mosquito = 0.6
-        self.proporcion_hembras = 0.5
+        self.eggs_per_female = 100
+        self.mating_probability = 0.6
+        self.female_ratio = 0.5
         
-        self.dias_base_maduracion_huevo = 3
-        self.temp_optima_maduracion_huevo = 21.0
-        self.sensibilidad_temp_maduracion_huevo = 5.0
+        self.egg_maturation_base_days = 3
+        self.egg_maturation_temp_optimal = 21.0
+        self.egg_maturation_temp_sensitivity = 5.0
         
-        self.dias_base_desarrollo_huevo = 8
-        self.temp_optima_desarrollo_huevo = 25.0
-        self.sensibilidad_temp_desarrollo_huevo = 1.0
+        self.egg_to_adult_base_days = 8
+        self.egg_to_adult_temp_optimal = 25.0
+        self.egg_to_adult_temp_sensitivity = 1.0
         
-        self.umbral_precipitacion_cria = 0.0
-        self.proporcion_sitios_cria = 0.2
+        self.rainfall_threshold = 0.0
+        self.breeding_site_ratio = 0.2
         
         # Distribución de tipos de movilidad
-        self.dist_estudiantes = 0.25
-        self.dist_trabajadores = 0.35
-        self.dist_moviles = 0.25
-        self.dist_estacionarios = 0.15
+        self.mobility_distribution_student = 0.30
+        self.mobility_distribution_worker = 0.40
+        self.mobility_distribution_mobile = 0.20
+        self.mobility_distribution_stationary = 0.10
         
         # Parámetros del entorno (tipos de celdas)
-        self.proporcion_celdas_agua = 0.05  # 5% agua
-        self.proporcion_celdas_parques = 0.10  # 10% parques
+        self.water_ratio = 0.05  # 5% agua
+        self.park_ratio = 0.10  # 10% parques
         
         # Tamaños de zonas
-        self.agua_min = 2
-        self.agua_max = 4
-        self.parque_min = 3
-        self.parque_max = 6
+        self.water_min = 2
+        self.water_max = 4
+        self.park_min = 3
+        self.park_max = 6
         
         # Parámetros de vuelo de mosquitos
-        self.rango_vuelo_max = 10  # ~350m si celda=35m
+        self.max_range = 5  # 5 celdas (~190m si celda=38m)
         
         # Parámetros de control LSM
-        self.lsm_frecuencia_dias = 7
-        self.lsm_cobertura = 0.7
-        self.lsm_efectividad = 0.8
+        self.lsm_frequency_days = 7
+        self.lsm_coverage = 0.7
+        self.lsm_effectiveness = 0.8
         
         # Parámetros de control ITN/IRS
-        self.itn_irs_duracion_dias = 90
-        self.itn_irs_cobertura = 0.6
-        self.itn_irs_efectividad = 0.7
+        self.itn_irs_duration_days = 90
+        self.itn_irs_coverage = 0.6
+        self.itn_irs_effectiveness = 0.7
         
         # Parámetros de comportamiento humano
-        self.prob_aislamiento = 0.7  # 70% se aíslan
-        self.radio_mov_infectado = 1  # 1 celda de radio
+        self.isolation_probability = 0.7  # 70% se aíslan
+        self.infected_mobility_radius = 1  # 1 celda de radio
     
     def step(self):
         """
@@ -508,17 +507,17 @@ class DengueModel(Model):
         Aplica estrategias de control según configuración.
         
         LSM (Larval Source Management):
-        - Frecuencia: lsm_frecuencia_dias (por defecto 7 días)
-        - Cobertura: lsm_cobertura (por defecto 70%)
-        - Efectividad: lsm_efectividad (por defecto 80%)
+        - Frecuencia: lsm_frequency_days (por defecto 7 días)
+        - Cobertura: lsm_coverage (por defecto 70%)
+        - Efectividad: lsm_effectiveness (por defecto 80%)
         
         ITN/IRS (Insecticide-Treated Nets / Indoor Residual Spraying):
-        - Duración: itn_irs_duracion_dias (por defecto 90 días)
-        - Cobertura: itn_irs_cobertura (por defecto 60% hogares)
-        - Efectividad: itn_irs_efectividad (por defecto 70%)
+        - Duración: itn_irs_duration_days (por defecto 90 días)
+        - Cobertura: itn_irs_coverage (por defecto 60% hogares)
+        - Efectividad: itn_irs_effectiveness (por defecto 70%)
         """
         # LSM: Aplicar según frecuencia configurada
-        if self.usar_lsm and self.dia_simulacion % self.lsm_frecuencia_dias == 0:
+        if self.usar_lsm and self.dia_simulacion % self.lsm_frequency_days == 0:
             self._aplicar_lsm()
         
         # ITN/IRS: Activar según necesidad
@@ -539,9 +538,10 @@ class DengueModel(Model):
                  if isinstance(a, MosquitoAgent) and a.etapa == EtapaVida.HUEVO]
         
         # Aplicar reducción: cobertura × efectividad
-        reduccion = self.lsm_cobertura * self.lsm_efectividad
+        reduccion = self.lsm_coverage * self.lsm_effectiveness
         for huevo in huevos:
             if self.random.random() < reduccion:
+                huevo.remove()
                 self.agents.remove(huevo)
     
     def _aplicar_itn_irs(self):
@@ -581,8 +581,8 @@ class DengueModel(Model):
                 mapa[(x, y)] = Celda(TipoCelda.URBANA, (x, y))
         
         # Obtener proporciones desde configuración
-        prop_agua = getattr(self, 'proporcion_celdas_agua', 0.05)
-        prop_parques = getattr(self, 'proporcion_celdas_parques', 0.10)
+        prop_agua = getattr(self, 'water_ratio', 0.05)
+        prop_parques = getattr(self, 'park_ratio', 0.10)
         
         # Calcular cantidades totales
         total_celdas = self.width * self.height
@@ -630,11 +630,11 @@ class DengueModel(Model):
         
         # Tamaño de zonas según tipo (desde configuración)
         if tipo.value == "agua":
-            tamaño_min = getattr(self, 'agua_min', 2)
-            tamaño_max = getattr(self, 'agua_max', 4)
+            tamaño_min = getattr(self, 'water_min', 2)
+            tamaño_max = getattr(self, 'water_max', 4)
         else:  # parques
-            tamaño_min = getattr(self, 'parque_min', 3)
-            tamaño_max = getattr(self, 'parque_max', 6)
+            tamaño_min = getattr(self, 'park_min', 3)
+            tamaño_max = getattr(self, 'park_max', 6)
         
         intentos = 0
         max_intentos = 1000
@@ -740,10 +740,10 @@ class DengueModel(Model):
         """
         # Usar distribución desde configuración
         tipos_dist = [
-            (TipoMovilidad.ESTUDIANTE, self.dist_estudiantes),
-            (TipoMovilidad.TRABAJADOR, self.dist_trabajadores),
-            (TipoMovilidad.MOVIL_CONTINUO, self.dist_moviles),
-            (TipoMovilidad.ESTACIONARIO, self.dist_estacionarios)
+            (TipoMovilidad.ESTUDIANTE, self.mobility_distribution_student),
+            (TipoMovilidad.TRABAJADOR, self.mobility_distribution_worker),
+            (TipoMovilidad.MOVIL_CONTINUO, self.mobility_distribution_mobile),
+            (TipoMovilidad.ESTACIONARIO, self.mobility_distribution_stationary)
         ]
         
         infectados_asignados = 0

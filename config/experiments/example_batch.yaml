@@ -1,0 +1,43 @@
+# Configuración de experimento batch para BatchRunnerMP
+#
+# Este archivo define barridos de parámetros para ejecutar múltiples
+# simulaciones en paralelo y analizar sensibilidad del modelo de dengue.
+
+experiment:
+  name: "dengue_sensitivity_analysis"
+  description: "Análisis de sensibilidad de parámetros clave"
+  
+  # Número de réplicas por combinación de parámetros
+  iterations: 3
+  
+  # Número máximo de steps por simulación
+  max_steps: 90  # 3 meses para pruebas rápidas
+  
+  # Parámetros fijos que NO varían
+  fixed_params:
+    width: 150
+    height: 150
+    fecha_inicio: "2022-01-01"  # Fecha dentro del rango de datos climáticos disponibles
+    climate_data_path: "data/raw/datos_climaticos_2022.csv"  # Archivo con datos climáticos reales
+    config_file: "config/default_config.yaml"  # Configuración base
+  
+  # Parámetros que varían en el barrido
+  variable_params:
+    # Población inicial
+    num_humanos: [1000, 3000]
+    num_mosquitos: [500, 1500]
+    
+    # Infectados iniciales
+    infectados_iniciales: [5, 10]
+    
+    # Estrategias de control
+    usar_lsm: [false, true]
+
+# Configuración de paralelización
+parallel:
+  processes: 4  # Número de procesos paralelos
+  
+# Configuración de salida
+output:
+  directory: "results/batch_experiments"
+  prefix: "dengue_batch"
