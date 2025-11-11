@@ -224,15 +224,23 @@ class HumanAgent(Agent):
                 self.mover_a(self.pos_hogar)
                 return
             else:
-                # Sin aislamiento: movilidad reducida (usar radio cacheado)
-                vecindad = self.model.grid.get_neighborhood(
-                    self.pos_hogar,
-                    moore=True,
-                    include_center=True,
-                    radius=self.infected_mobility_radius
-                )
-                nueva_pos = self.random.choice(vecindad)
-                self.mover_a(nueva_pos)
+                # Sin aislamiento: retorna a casa + movilidad local reducida
+                # Primero ir a casa (directo), luego movilidad local allí
+                distancia_a_casa = self._distancia_manhattan(self.pos_hogar)
+                
+                if distancia_a_casa <= self.infected_mobility_radius:
+                    # Ya está en casa o muy cerca: movilidad local reducida
+                    vecindad = self.model.grid.get_neighborhood(
+                        self.pos,  # Movilidad local desde posición actual
+                        moore=True,
+                        include_center=True,
+                        radius=self.infected_mobility_radius
+                    )
+                    nueva_pos = self.random.choice(vecindad)
+                    self.mover_a(nueva_pos)
+                else:
+                    # Está lejos de casa: ir directo a casa
+                    self.mover_a(self.pos_hogar)
                 return
         
         # Agentes no infectados: usar probabilidades diarias
