@@ -100,7 +100,10 @@ class MosquitoAgent(Agent):
         self.esta_apareado = False  # Solo hembras existen en el modelo (machos implícitos)
         self.sitio_cria = sitio_cria
         self.dias_desde_ultima_puesta = 0  # Control de cooldown de reproducción
-        self.dias_cooldown_reproduccion = 3  # Mínimo 3 días entre puestas (ciclo gonotrófico)
+        
+        # Ciclo gonotrófico: días entre puestas (cargado desde configuración)
+        # Rango biológico: 2-4 días según Scott et al. (1993), Maciel-de-Freitas et al. (2006)
+        self.dias_cooldown_reproduccion = model.gonotrophic_cycle_days
         
         # Parámetros desde configuración del modelo (cacheados para rendimiento)
         self.mortality_rate = model.mortality_rate

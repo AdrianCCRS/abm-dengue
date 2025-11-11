@@ -81,6 +81,10 @@ mosquito_breeding:
   rainfall_threshold: 0.0
   breeding_site_ratio: 0.2
   
+  # Ciclo gonotrófico (reproducción de hembras)
+  gonotrophic_cycle_days: 3     # Días mínimos entre puestas (2-4 días según literatura)
+                                 # Referencia: Scott et al. (1993), Maciel-de-Freitas et al. (2006)
+  
   # Sitios de cría temporales (charcos post-lluvia)
   temporary_sites:
     min_rainfall: 5.0           # mm mínimos para crear charcos
@@ -106,6 +110,9 @@ environment:
     park_max: 6
   mosquito_flight:
     max_range: 5           # 5 celdas (~190 m de rango de vuelo diario)
+  grid_generation:
+    max_placement_failures: 50  # Límite de fallos consecutivos al colocar zonas
+    max_total_attempts: 500     # Límite total de intentos de colocación
   synthetic_climate:
     rain_probability: 0.35 # 35 % de días con lluvia (~128 días/año)
     rain_min_mm: 5.0       # lluvias típicas ligeras a moderadas

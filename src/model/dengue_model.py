@@ -334,6 +334,9 @@ class DengueModel(Model):
         self.rainfall_threshold = breeding.get('rainfall_threshold', 0.0)
         self.breeding_site_ratio = breeding.get('breeding_site_ratio', 0.2)
         
+        # Ciclo gonotrófico (días entre puestas)
+        self.gonotrophic_cycle_days = breeding.get('gonotrophic_cycle_days', 3)
+        
         # Sitios de cría temporales (charcos post-lluvia)
         temp_sites = breeding.get('temporary_sites', {})
         self.temp_site_min_rainfall = temp_sites.get('min_rainfall', 5.0)  # mm mínimos
@@ -364,6 +367,11 @@ class DengueModel(Model):
         # Parámetros de vuelo de mosquitos
         mosquito_flight = environment.get('mosquito_flight', {})
         self.max_range = mosquito_flight.get('max_range', 5)
+        
+        # Parámetros de generación del grid
+        grid_generation = environment.get('grid_generation', {})
+        self.max_placement_failures = grid_generation.get('max_placement_failures', 50)
+        self.max_total_attempts = grid_generation.get('max_total_attempts', 500)
         
         # Parámetros de control LSM
         control = config.get('control', {})
@@ -468,6 +476,9 @@ class DengueModel(Model):
         self.rainfall_threshold = 0.0
         self.breeding_site_ratio = 0.2
         
+        # Ciclo gonotrófico (días entre puestas)
+        self.gonotrophic_cycle_days = 3  # 2-4 días según literatura
+        
         # Sitios de cría temporales (charcos post-lluvia)
         self.temp_site_min_rainfall = 5.0  # mm mínimos
         self.temp_site_sites_per_mm = 0.5  # charcos/mm
@@ -492,6 +503,10 @@ class DengueModel(Model):
         
         # Parámetros de vuelo de mosquitos
         self.max_range = 5  # 5 celdas (~190m si celda=38m)
+        
+        # Parámetros de generación del grid
+        self.max_placement_failures = 50  # Límite de fallos consecutivos
+        self.max_total_attempts = 500  # Límite total de intentos
         
         # Parámetros de control LSM
         self.lsm_frequency_days = 7
@@ -741,10 +756,10 @@ class DengueModel(Model):
         
         # Límite adaptativo: más intentos al inicio, menos cuando el grid está lleno
         intentos_consecutivos_fallidos = 0
-        max_fallos_consecutivos = 50  # Rendirse tras 50 fallos seguidos
+        max_fallos_consecutivos = self.max_placement_failures  # Cargado desde configuración
         
         total_intentos = 0
-        max_total_intentos = 500  # Límite razonable
+        max_total_intentos = self.max_total_attempts  # Cargado desde configuración
         
         while celdas_asignadas < num_celdas_objetivo and total_intentos < max_total_intentos:
             total_intentos += 1
