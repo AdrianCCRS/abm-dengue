@@ -103,29 +103,29 @@ class MosquitoAgent(Agent):
         self.dias_cooldown_reproduccion = 3  # Mínimo 3 días entre puestas (ciclo gonotrófico)
         
         # Parámetros desde configuración del modelo (cacheados para rendimiento)
-        self.tasa_mortalidad = model.mortality_rate
-        self.rango_sensorial = model.sensory_range
-        self.prob_apareamiento = model.mating_probability
-        self.huevos_por_hembra = model.eggs_per_female
+        self.mortality_rate = model.mortality_rate
+        self.sensory_range = model.sensory_range
+        self.mating_probability = model.mating_probability
+        self.eggs_per_female = model.eggs_per_female
         
         # Parámetros de desarrollo de huevos (cacheados)
-        self.dias_base_desarrollo_huevo = model.egg_to_adult_base_days
-        self.temp_optima_desarrollo_huevo = model.egg_to_adult_temp_optimal
-        self.sensibilidad_temp_desarrollo_huevo = model.egg_to_adult_temp_sensitivity
+        self.egg_to_adult_base_days = model.egg_to_adult_base_days
+        self.egg_to_adult_temp_optimal = model.egg_to_adult_temp_optimal
+        self.egg_to_adult_temp_sensitivity = model.egg_to_adult_temp_sensitivity
         
         # Parámetros de transmisión (cacheados)
-        self.prob_transmision_mosquito_humano = model.mosquito_to_human_prob  # α
-        self.prob_transmision_humano_mosquito = model.human_to_mosquito_prob  # β
+        self.mosquito_to_human_prob = model.mosquito_to_human_prob  # α
+        self.human_to_mosquito_prob = model.human_to_mosquito_prob  # β
         
         # Parámetros de reproducción (cacheados)
-        self.umbral_precipitacion_cria = model.rainfall_threshold
-        self.proporcion_hembras = model.female_ratio
-        self.dias_base_maduracion_huevo = model.egg_maturation_base_days
-        self.temp_optima_maduracion_huevo = model.egg_maturation_temp_optimal
-        self.sensibilidad_temp_maduracion_huevo = model.egg_maturation_temp_sensitivity
+        self.rainfall_threshold = model.rainfall_threshold
+        self.female_ratio = model.female_ratio
+        self.egg_maturation_base_days = model.egg_maturation_base_days
+        self.egg_maturation_temp_optimal = model.egg_maturation_temp_optimal
+        self.egg_maturation_temp_sensitivity = model.egg_maturation_temp_sensitivity
         
         # Parámetros de movimiento (cacheados)
-        self.rango_vuelo_max = model.max_range
+        self.max_range = model.max_range
     
     def step(self):
         """
@@ -154,7 +154,7 @@ class MosquitoAgent(Agent):
         - sensibilidad: 1.0 día por cada grado de desviación
         """
         temperatura = self.model.temperatura_actual
-        duracion_dias = self.dias_base_desarrollo_huevo + abs(temperatura - self.temp_optima_desarrollo_huevo) * self.sensibilidad_temp_desarrollo_huevo
+        duracion_dias = self.egg_to_adult_base_days + abs(temperatura - self.egg_to_adult_temp_optimal) * self.egg_to_adult_temp_sensitivity
         
         # Incrementar días como huevo
         self.dias_como_huevo += 1
@@ -196,7 +196,7 @@ class MosquitoAgent(Agent):
             self.dias_desde_ultima_puesta += 1
         
         # 1. Mortalidad diaria (usar parámetro del modelo)
-        if self.random.random() < self.tasa_mortalidad:
+        if self.random.random() < self.mortality_rate:
             # Solo remover del grid si tiene posición
             if self.pos is not None:
                 self.model.grid.remove_agent(self)
@@ -296,7 +296,7 @@ class MosquitoAgent(Agent):
             self.pos,
             moore=True,
             include_center=False,
-            radius=self.rango_sensorial
+            radius=self.sensory_range
         )
         
         # Filtrar solo humanos (isinstance es más rápido que __class__.__name__)
@@ -340,8 +340,8 @@ class MosquitoAgent(Agent):
         self.ha_picado_hoy = True
         
         # Usar probabilidades de transmisión cacheadas
-        alpha = self.prob_transmision_mosquito_humano  # α
-        beta = self.prob_transmision_humano_mosquito  # β
+        alpha = self.mosquito_to_human_prob  # α
+        beta = self.human_to_mosquito_prob  # β
         
         # Transmisión mosquito → humano (α)
         if self.estado == EstadoMosquito.INFECTADO and humano.es_susceptible():
@@ -370,7 +370,7 @@ class MosquitoAgent(Agent):
         - Modelar machos consume ~50% de recursos sin aportar información
         - Esta simplificación mantiene la misma dinámica poblacional
         """
-        if self.random.random() < self.prob_apareamiento:
+        if self.random.random() < self.mating_probability:
             self.esta_apareado = True
     
     def intentar_reproduccion(self):
@@ -398,7 +398,7 @@ class MosquitoAgent(Agent):
         # Verificar precipitación (necesaria para sitios de cría activos)
         precipitacion = self.model.precipitacion_actual if hasattr(self.model, 'precipitacion_actual') else 0
         
-        if precipitacion < self.umbral_precipitacion_cria:
+        if precipitacion < self.rainfall_threshold:
             return
         
         # Buscar sitio de cría cercano
@@ -408,7 +408,7 @@ class MosquitoAgent(Agent):
         
         # Poner solo huevos hembra (optimización: los machos no aportan al modelo)
         # female_ratio determina cuántos huevos son hembras
-        num_huevos_hembra = int(self.huevos_por_hembra * self.proporcion_hembras)
+        num_huevos_hembra = int(self.eggs_per_female * self.female_ratio)
         
         # Crear solo huevos hembra
         for _ in range(num_huevos_hembra):
@@ -446,7 +446,7 @@ class MosquitoAgent(Agent):
         int
             Días necesarios para maduración
         """
-        return int(self.dias_base_maduracion_huevo + abs(temperatura - self.temp_optima_maduracion_huevo) / self.sensibilidad_temp_maduracion_huevo)
+        return int(self.egg_maturation_base_days + abs(temperatura - self.egg_maturation_temp_optimal) / self.egg_maturation_temp_sensitivity)
     
     def _buscar_sitio_cria(self) -> Optional[Tuple[int, int]]:
         """
@@ -475,7 +475,7 @@ class MosquitoAgent(Agent):
         
         # Filtrar por rango de vuelo máximo cacheado (Fr = ~350m)
         sitios_alcanzables = [s for s in sitios_disponibles 
-                              if self._distancia(s) <= self.rango_vuelo_max]
+                              if self._distancia(s) <= self.max_range]
         
         if not sitios_alcanzables:
             # Si ninguno alcanzable, retornar el más cercano aunque esté lejos
