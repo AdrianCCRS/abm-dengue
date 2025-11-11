@@ -48,7 +48,7 @@ mobility:
 mosquito_breeding:
   eggs_per_female: 100
   mating_probability: 0.6
-  female_ratio: 0.5
+  female_ratio: 0.52
   egg_maturation_base_days: 3
   egg_maturation_temp_optimal: 21.0
   egg_maturation_temp_sensitivity: 5.0

@@ -33,9 +33,15 @@ class EtapaVida(Enum):
 
 class MosquitoAgent(Agent):
     """
-    Agente mosquito con estados SI y reproducción dependiente de temperatura.
+    Agente mosquito hembra con estados SI y reproducción dependiente de temperatura.
     
-    Representa un mosquito Aedes aegypti en la simulación con:
+    OPTIMIZACIÓN: Solo se modelan hembras. Los machos son implícitos ya que:
+    - No pican ni transmiten enfermedades
+    - No ponen huevos
+    - Solo sirven para apareamiento (modelado con mating_probability)
+    - Reducen la población de agentes en ~50% sin pérdida de información
+    
+    Representa un mosquito Aedes aegypti hembra en la simulación con:
     - Estados epidemiológicos: S (Susceptible), I (Infectado)
     - Ciclo de vida: huevo → adulto
     - Movimiento: caminata aleatoria con sensado de humanos
@@ -49,8 +55,6 @@ class MosquitoAgent(Agent):
         Modelo al que pertenece el agente
     etapa : EtapaVida
         Etapa inicial (HUEVO o ADULTO)
-    es_hembra : bool, default=True
-        Si es mosquito hembra (solo hembras pican y ponen huevos)
     sitio_cria : Optional[Tuple[int, int]], default=None
         Posición del sitio de cría (para huevos)
         
@@ -60,8 +64,6 @@ class MosquitoAgent(Agent):
         Estado epidemiológico (S o I)
     etapa : EtapaVida
         Etapa de vida actual
-    es_hembra : bool
-        Indicador de sexo (True = hembra, False = macho)
     dias_como_huevo : int
         Días transcurridos en etapa de huevo
     edad : int
@@ -81,7 +83,6 @@ class MosquitoAgent(Agent):
         unique_id: int,
         model,
         etapa: EtapaVida = EtapaVida.ADULTO,
-        es_hembra: bool = True,
         sitio_cria: Optional[Tuple[int, int]] = None
     ):
         super().__init__(unique_id, model)
@@ -91,13 +92,12 @@ class MosquitoAgent(Agent):
         
         # Ciclo de vida
         self.etapa = etapa
-        self.es_hembra = es_hembra
         self.dias_como_huevo = 0
         self.edad = 0
         
         # Comportamiento
         self.ha_picado_hoy = False
-        self.esta_apareado = False if es_hembra else True  # Machos siempre "listos"
+        self.esta_apareado = False  # Solo hembras existen en el modelo (machos implícitos)
         self.sitio_cria = sitio_cria
         self.dias_desde_ultima_puesta = 0  # Control de cooldown de reproducción
         self.dias_cooldown_reproduccion = 3  # Mínimo 3 días entre puestas (ciclo gonotrófico)
@@ -179,14 +179,14 @@ class MosquitoAgent(Agent):
     
     def procesar_comportamiento_adulto(self):
         """
-        Ejecuta el comportamiento del mosquito adulto.
+        Ejecuta el comportamiento del mosquito adulto (hembra).
         
         Secuencia diaria:
         1. Verificar mortalidad
         2. Moverse (caminata aleatoria o dirigida a humano)
-        3. Intentar picar (solo hembras)
-        4. Aparearse si encuentra pareja
-        5. Reproducir si está apareada y hay sitio de cría
+        3. Intentar picar
+        4. Aparearse (apareamiento implícito)
+        5. Reproducir si está apareada y ha picado
         """
         self.edad += 1
         self.ha_picado_hoy = False
@@ -206,16 +206,15 @@ class MosquitoAgent(Agent):
         # 2. Movimiento
         self.mover()
         
-        # 3. Picar humano (solo hembras)
-        if self.es_hembra:
-            self.intentar_picar()
+        # 3. Picar humano
+        self.intentar_picar()
         
-        # 4. Apareamiento
-        if self.es_hembra and not self.esta_apareado:
+        # 4. Apareamiento (implícito: probabilidad de encontrar macho)
+        if not self.esta_apareado:
             self.intentar_apareamiento()
         
-        # 5. Reproducción (solo hembras apareadas)
-        if self.es_hembra and self.esta_apareado and self.ha_picado_hoy:
+        # 5. Reproducción
+        if self.esta_apareado and self.ha_picado_hoy:
             self.intentar_reproduccion()
     
     def mover(self):
@@ -223,23 +222,24 @@ class MosquitoAgent(Agent):
         Movimiento del mosquito: caminata aleatoria o dirigida.
         
         Lógica:
-        - Solo hembras buscan humanos (machos no pican, no necesitan buscarlos)
-        - Si hembra detecta humano dentro del rango sensorial (Sr = 3): moverse hacia él
+        - Buscar humanos dentro del rango sensorial (Sr = 3)
+        - Si detecta humano: moverse hacia él
         - Si no: caminata aleatoria (Moore neighborhood)
+        
+        Nota: Todos los mosquitos en el modelo son hembras (los machos son implícitos).
         """
         # Verificar que el mosquito tenga posición (huevos no tienen posición)
         if self.pos is None:
             return
         
-        # Solo hembras buscan humanos activamente (OPTIMIZACIÓN: machos no pican)
-        if self.es_hembra:
-            humano_cercano = self.buscar_humano_cercano()
-            if humano_cercano:
-                # Moverse hacia el humano detectado
-                self.mover_hacia(humano_cercano.pos)
-                return
+        # Buscar humano cercano
+        humano_cercano = self.buscar_humano_cercano()
+        if humano_cercano:
+            # Moverse hacia el humano detectado
+            self.mover_hacia(humano_cercano.pos)
+            return
         
-        # Caminata aleatoria (machos siempre, hembras si no detectan humano)
+        # Caminata aleatoria si no detecta humano
         self.mover_aleatorio()
     
     def mover_aleatorio(self):
@@ -312,13 +312,13 @@ class MosquitoAgent(Agent):
         """
         Intenta picar a un humano en la misma celda.
         
-        Solo hembras pican. Puede resultar en:
+        Puede resultar en:
         - Transmisión mosquito → humano (si mosquito infectado, humano susceptible)
         - Transmisión humano → mosquito (si mosquito susceptible, humano infectado)
         
         Probabilidades desde configuración del modelo:
-        - α (mosquito → humano): mosquito_to_human_prob
-        - β (humano → mosquito): human_to_mosquito_prob
+        - α (mosquito → humano): mosquito_to_human_prob (por defecto 0.6)
+        - β (humano → mosquito): human_to_mosquito_prob (por defecto 0.275)
         """
         if self.ha_picado_hoy:
             return
@@ -355,23 +355,22 @@ class MosquitoAgent(Agent):
     
     def intentar_apareamiento(self):
         """
-        Intenta aparearse con un macho en la misma celda.
+        Intenta aparearse (apareamiento implícito con población de machos).
         
-        Probabilidad de éxito desde configuración: prob_apareamiento_mosquito
-        Solo hembras no apareadas pueden aparearse.
+        En lugar de buscar machos físicos en el modelo (que no aportan nada),
+        asumimos que hay suficientes machos en el ambiente y aplicamos
+        directamente la probabilidad de apareamiento.
+        
+        Probabilidad de éxito: mating_probability (por defecto 0.6)
+        
+        Justificación biológica:
+        - Machos no pican ni transmiten enfermedades
+        - Machos no ponen huevos
+        - Su única función es aparearse
+        - Modelar machos consume ~50% de recursos sin aportar información
+        - Esta simplificación mantiene la misma dinámica poblacional
         """
-        # Verificar que el mosquito tenga posición
-        if self.pos is None:
-            return
-        
-        # Obtener mosquitos en la misma celda
-        agentes_celda = self.model.grid.get_cell_list_contents([self.pos])
-        mosquitos = [a for a in agentes_celda 
-                    if isinstance(a, MosquitoAgent)
-                    and a.etapa == EtapaVida.ADULTO 
-                    and not a.es_hembra]
-        
-        if mosquitos and self.random.random() < self.prob_apareamiento:
+        if self.random.random() < self.prob_apareamiento:
             self.esta_apareado = True
     
     def intentar_reproduccion(self):
@@ -379,14 +378,18 @@ class MosquitoAgent(Agent):
         Intenta poner huevos en un sitio de cría cercano.
         
         Requisitos:
-        - Ser hembra apareada
+        - Estar apareada (probabilidad aplicada en intentar_apareamiento)
         - Haber picado (ingesta de sangre)
         - Encontrar sitio de cría activo
         - Condiciones climáticas favorables (precipitación >= umbral)
         - Haber pasado el período de cooldown (ciclo gonotrófico ~3 días)
         
-        Resultado: huevos_por_hembra (según configuración, por defecto 100)
-        Sexo: determinado por female_ratio (por defecto Pf = 0.5)
+        Resultado: eggs_per_female huevos (por defecto 100)
+        Sexo de huevos: female_ratio determina proporción de hembras
+        
+        Nota: Solo los huevos hembra se convertirán en adultos. Los huevos
+        macho son descartados (nunca eclosionan) ya que los machos no
+        aportan información al modelo epidemiológico.
         """
         # Verificar cooldown (ciclo gonotrófico: tiempo entre puestas)
         if self.dias_desde_ultima_puesta < self.dias_cooldown_reproduccion:
@@ -403,21 +406,17 @@ class MosquitoAgent(Agent):
         if not sitio:
             return
         
-        # Poner huevos con proporción de hembras cacheada
-        prob_hembra = self.proporcion_hembras  # Pf = 0.5
+        # Poner solo huevos hembra (optimización: los machos no aportan al modelo)
+        # female_ratio determina cuántos huevos son hembras
+        num_huevos_hembra = int(self.huevos_por_hembra * self.proporcion_hembras)
         
-        # Poner huevos
-        for _ in range(self.huevos_por_hembra):
-            # Determinar sexo según proporción de hembras
-            es_hembra = self.random.random() < prob_hembra
-            
-            # Crear huevo
+        # Crear solo huevos hembra
+        for _ in range(num_huevos_hembra):
             unique_id = self.model.next_id()
             huevo = MosquitoAgent(
                 unique_id=unique_id,
                 model=self.model,
                 etapa=EtapaVida.HUEVO,
-                es_hembra=es_hembra,
                 sitio_cria=sitio
             )
             
@@ -427,7 +426,6 @@ class MosquitoAgent(Agent):
         # Resetear estado reproductivo
         self.ha_picado_hoy = False
         self.dias_desde_ultima_puesta = 0  # Reiniciar cooldown
-        # Nota: hembra puede volver a reproducir después del cooldown
     
     def _calcular_dias_maduracion(self, temperatura: float) -> int:
         """
@@ -507,5 +505,4 @@ class MosquitoAgent(Agent):
     def __repr__(self) -> str:
         """Representación en cadena del agente."""
         return (f"MosquitoAgent(id={self.unique_id}, estado={self.estado.value}, "
-                f"etapa={self.etapa.value}, sexo={'F' if self.es_hembra else 'M'}, "
-                f"pos={self.pos})")
+                f"etapa={self.etapa.value}, pos={self.pos})")

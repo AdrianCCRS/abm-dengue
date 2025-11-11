@@ -186,12 +186,15 @@ class DengueModel(Model):
         # Cache de parques para búsqueda rápida (evita iterar sobre todas las celdas)
         self.parques = self._generar_lista_parques()
         
+        # Cache de celdas urbanas para asignación eficiente de hogares/destinos
+        self.celdas_urbanas = self._generar_lista_urbanas()
+        
         # Contador de IDs único
         self._next_id = 0
         
         # Crear agentes
-        self._crear_humanos(num_humanos, infectados_iniciales)
-        self._crear_mosquitos(num_mosquitos, mosquitos_infectados_iniciales)
+        self._crear_humanos(num_humanos, self.infectados_iniciales)
+        self._crear_mosquitos(num_mosquitos, self.mosquitos_infectados_iniciales)
         self._crear_huevos(num_huevos)
         
         # DataCollector para métricas
@@ -266,6 +269,11 @@ class DengueModel(Model):
         
         Establece atributos del modelo que serán accedidos por los agentes.
         """
+        # Parámetros de simulación
+        simulation = config.get('simulation', {})
+        self.infectados_iniciales = simulation.get('infectados_iniciales', 5)
+        self.mosquitos_infectados_iniciales = simulation.get('mosquitos_infectados_iniciales', 2)
+        
         # Parámetros de enfermedad humana (SEIR)
         human_disease = config.get('human_disease', {})
         self.incubation_period = human_disease.get('incubation_period', 5.0)
@@ -361,6 +369,10 @@ class DengueModel(Model):
     
     def _cargar_configuracion_default(self):
         """Carga configuración por defecto si no se proporciona config."""
+        # Parámetros de simulación
+        self.infectados_iniciales = 5
+        self.mosquitos_infectados_iniciales = 2
+        
         # Parámetros de enfermedad humana (SEIR)
         self.incubation_period = 5.0  # Ne = 5 días
         self.infectious_period = 6.0  # Ni = 6 días
@@ -461,9 +473,9 @@ class DengueModel(Model):
         
         # 1. Actualizar clima
         self._actualizar_clima()
-        
+         
         # 2. Aplicar estrategias de control
-        self._aplicar_control()
+        #self._aplicar_control()
         
         # 3. Activar todos los agentes (actualiza estados, movimiento, interacciones)
         self.agents.shuffle().do("step")
@@ -606,85 +618,81 @@ class DengueModel(Model):
         celdas_ocupadas: set
     ):
         """
-        Crea zonas contiguas (clusters) de un tipo específico.
-        
-        Algoritmo:
-        1. Elegir centro aleatorio disponible
-        2. Expandir en forma de cuadrado/rectángulo
-        3. Repetir hasta alcanzar num_celdas_objetivo
-        
-        Parameters
-        ----------
-        mapa : Dict[Tuple[int, int], Celda]
-            Mapa de celdas a modificar
-        tipo : TipoCelda
-            Tipo de celda a crear (AGUA o PARQUE)
-        num_celdas_objetivo : int
-            Número total de celdas a asignar a este tipo
-        celdas_ocupadas : set
-            Set de posiciones ya ocupadas por otros tipos
+        Crea zonas contiguas de un tipo específico.
+        Versión optimizada con límites adaptativos.
         """
         from .celda import Celda
         
         celdas_asignadas = 0
         
-        # Tamaño de zonas según tipo (desde configuración)
+        # Cachear tamaños fuera del loop
         if tipo.value == "agua":
-            tamaño_min = getattr(self, 'water_min', 2)
-            tamaño_max = getattr(self, 'water_max', 4)
-        else:  # parques
-            tamaño_min = getattr(self, 'park_min', 3)
-            tamaño_max = getattr(self, 'park_max', 6)
+            tamaño_min = self.water_min
+            tamaño_max = self.water_max
+        else:
+            tamaño_min = self.park_min
+            tamaño_max = self.park_max
         
-        intentos = 0
-        max_intentos = 1000
+        # Límite adaptativo: más intentos al inicio, menos cuando el grid está lleno
+        intentos_consecutivos_fallidos = 0
+        max_fallos_consecutivos = 50  # Rendirse tras 50 fallos seguidos
         
-        while celdas_asignadas < num_celdas_objetivo and intentos < max_intentos:
-            intentos += 1
+        total_intentos = 0
+        max_total_intentos = 500  # Límite razonable
+        
+        while celdas_asignadas < num_celdas_objetivo and total_intentos < max_total_intentos:
+            total_intentos += 1
             
-            # Elegir centro aleatorio
-            centro_x = self.random.randint(1, self.width - tamaño_max - 1)
-            centro_y = self.random.randint(1, self.height - tamaño_max - 1)
+            # Rendirse si hay muchos fallos consecutivos (grid probablemente lleno)
+            if intentos_consecutivos_fallidos >= max_fallos_consecutivos:
+                print(f"Advertencia: No se pudo asignar todas las celdas de tipo {tipo.value}. "
+                      f"Asignadas: {celdas_asignadas}/{num_celdas_objetivo}")
+                break
             
-            # Verificar si centro está disponible
-            if (centro_x, centro_y) in celdas_ocupadas:
-                continue
-            
-            # Determinar tamaño de esta zona
+            # Determinar tamaño de zona
             ancho = self.random.randint(tamaño_min, tamaño_max)
             alto = self.random.randint(tamaño_min, tamaño_max)
             
-            # Verificar si toda la zona está disponible
-            zona_disponible = True
-            celdas_zona = []
+            # Validar bounds antes de generar
+            max_x = self.width - ancho
+            max_y = self.height - alto
             
-            for dx in range(ancho):
-                for dy in range(alto):
-                    x = centro_x + dx
-                    y = centro_y + dy
-                    
-                    if x >= self.width or y >= self.height:
-                        zona_disponible = False
-                        break
-                    
-                    if (x, y) in celdas_ocupadas:
-                        zona_disponible = False
-                        break
-                    
-                    celdas_zona.append((x, y))
+            if max_x < 1 or max_y < 1:
+                intentos_consecutivos_fallidos += 1
+                continue
+            
+            # Elegir centro aleatorio
+            centro_x = self.random.randint(1, max_x)
+            centro_y = self.random.randint(1, max_y)
+            
+            # Generar lista de celdas
+            celdas_zona = [
+                (centro_x + dx, centro_y + dy)
+                for dx in range(ancho)
+                for dy in range(alto)
+            ]
+            
+            # Validación rápida: si alguna está ocupada, rechazar
+            if any(pos in celdas_ocupadas for pos in celdas_zona):
+                intentos_consecutivos_fallidos += 1
+                continue
+            
+            # Zona válida: asignar todas las celdas
+            for pos in celdas_zona:
+                mapa[pos] = Celda(tipo, pos)
+                celdas_ocupadas.add(pos)
+                celdas_asignadas += 1
                 
-                if not zona_disponible:
-                    break
+                if celdas_asignadas >= num_celdas_objetivo:
+                    return  # Éxito completo
             
-            # Si la zona está disponible, asignarla
-            if zona_disponible and celdas_zona:
-                for pos in celdas_zona:
-                    mapa[pos] = Celda(tipo, pos)
-                    celdas_ocupadas.add(pos)
-                    celdas_asignadas += 1
-                    
-                    if celdas_asignadas >= num_celdas_objetivo:
-                        break
+            # Zona colocada con éxito, resetear contador de fallos
+            intentos_consecutivos_fallidos = 0
+        
+        # Si llegamos aquí sin completar, advertir
+        if celdas_asignadas < num_celdas_objetivo:
+            print(f"Advertencia: Solo se asignaron {celdas_asignadas}/{num_celdas_objetivo} "
+                  f"celdas de tipo {tipo.value}")
     
     def _generar_sitios_cria(self) -> List[Tuple[int, int]]:
         """
@@ -721,15 +729,34 @@ class DengueModel(Model):
         
         return parques
     
+    def _generar_lista_urbanas(self) -> List[Tuple[int, int]]:
+        """
+        Genera lista de posiciones urbanas para asignación eficiente.
+        
+        Pre-calcula todas las celdas urbanas al inicio para evitar búsquedas
+        repetitivas durante la creación de agentes. Con 3000 humanos, esto
+        ahorra hasta 6000 búsquedas de coordenadas válidas.
+        
+        Returns
+        -------
+        List[Tuple[int, int]]
+            Lista de coordenadas de celdas urbanas
+        """
+        # Extraer celdas tipo URBANA del mapa
+        urbanas = [pos for pos, celda in self.mapa_celdas.items() 
+                  if celda.tipo == TipoCelda.URBANA]
+        
+        return urbanas
+    
     def _crear_humanos(self, num_humanos: int, infectados_iniciales: int):
         """
         Crea la población inicial de humanos.
         
         Distribución desde configuración (por defecto):
-        - 25% Estudiantes (Tipo 1)
-        - 35% Trabajadores (Tipo 2)
-        - 25% Móviles continuos (Tipo 3)
-        - 15% Estacionarios (Tipo 4)
+        - 30% Estudiantes (Tipo 1)
+        - 40% Trabajadores (Tipo 2)
+        - 20% Móviles continuos (Tipo 3)
+        - 10% Estacionarios (Tipo 4)
         
         Parameters
         ----------
@@ -759,15 +786,16 @@ class DengueModel(Model):
                     tipo = t
                     break
             
-            # Posiciones aleatorias
-            pos_hogar = (self.random.randrange(self.width), 
-                        self.random.randrange(self.height))
+            # Asignar hogar en celda urbana (fija para toda la simulación)
+            # Selección directa desde lista pre-calculada: O(1) vs O(100) del método anterior
+            pos_hogar = self.random.choice(self.celdas_urbanas)
             
-            # Destino según tipo
+            # Asignar destino (escuela/trabajo) en celda urbana para estudiantes y trabajadores
+            # Esta posición es FIJA (no cambia durante la simulación)
+            # Las visitas al parque se manejan aparte en la lógica de movilidad del agente
             pos_destino = None
             if tipo in [TipoMovilidad.ESTUDIANTE, TipoMovilidad.TRABAJADOR]:
-                pos_destino = (self.random.randrange(self.width),
-                             self.random.randrange(self.height))
+                pos_destino = self.random.choice(self.celdas_urbanas)
             
             # Crear agente
             unique_id = self.next_id()
@@ -792,33 +820,30 @@ class DengueModel(Model):
         """
         Crea la población inicial de mosquitos adultos.
         
-        Distribución:
-        - 50% hembras, 50% machos (Pf = 0.5)
+        Optimización: Solo crea hembras (100%), ya que los machos no aportan
+        información al modelo epidemiológico (no pican, no transmiten, no ponen huevos).
+        El apareamiento se modela implícitamente con mating_probability.
         
         Parameters
         ----------
         num_mosquitos : int
-            Número total de mosquitos adultos
+            Número total de mosquitos hembra
         infectados_iniciales : int
             Número de mosquitos infectados al inicio
         """
         infectados_asignados = 0
         
         for i in range(num_mosquitos):
-            # Determinar sexo según proporcion_hembras (configurable, por defecto Pf = 0.5)
-            es_hembra = self.random.random() < self.proporcion_hembras
-            
             # Posición aleatoria
             pos = (self.random.randrange(self.width),
                   self.random.randrange(self.height))
             
-            # Crear agente
+            # Crear agente (solo hembras)
             unique_id = self.next_id()
             mosquito = MosquitoAgent(
                 unique_id=unique_id,
                 model=self,
-                etapa=EtapaVida.ADULTO,
-                es_hembra=es_hembra
+                etapa=EtapaVida.ADULTO
             )
             
             # Asignar estado infectado a algunos
@@ -832,19 +857,17 @@ class DengueModel(Model):
     
     def _crear_huevos(self, num_huevos: int):
         """
-        Crea la población inicial de huevos.
+        Crea la población inicial de huevos (solo hembras).
         
         Los huevos se colocan en sitios de cría aleatorios.
+        Solo se crean huevos hembra ya que los machos no aportan al modelo.
         
         Parameters
         ----------
         num_huevos : int
-            Número total de huevos
+            Número total de huevos hembra a crear
         """
         for i in range(num_huevos):
-            # Determinar sexo futuro según proporcion_hembras (configurable, por defecto Pf = 0.5)
-            es_hembra = self.random.random() < self.proporcion_hembras
-            
             # Sitio de cría aleatorio
             if self.sitios_cria:
                 sitio = self.random.choice(self.sitios_cria)
@@ -852,13 +875,12 @@ class DengueModel(Model):
                 sitio = (self.random.randrange(self.width),
                         self.random.randrange(self.height))
             
-            # Crear huevo
+            # Crear huevo hembra
             unique_id = self.next_id()
             huevo = MosquitoAgent(
                 unique_id=unique_id,
                 model=self,
                 etapa=EtapaVida.HUEVO,
-                es_hembra=es_hembra,
                 sitio_cria=sitio
             )
             
