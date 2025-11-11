@@ -344,19 +344,25 @@ def main():
             sim = cfg['simulation']
             # Prioridad: CLI (--steps) > archivo > default 365
             steps = args.steps if args.steps is not None else sim.get('steps', 365)
+            width = sim.get('width', 150)
+            height = sim.get('height', 150)
             num_humanos = sim.get('num_humanos', args.humanos)
             num_mosquitos = sim.get('num_mosquitos', args.mosquitos)
             num_huevos = sim.get('num_huevos', args.huevos)
             infectados_iniciales = sim.get('infectados_iniciales', args.infectados)
+            mosquitos_infectados_iniciales = sim.get('mosquitos_infectados_iniciales', 2)
             usar_lsm = sim.get('usar_lsm', args.lsm)
             usar_itn_irs = sim.get('usar_itn_irs', args.itn_irs)
             seed = sim.get('seed', args.seed)
             parametros = {
                 'steps': steps,
+                'width': width,
+                'height': height,
                 'num_humanos': num_humanos,
                 'num_mosquitos': num_mosquitos,
                 'num_huevos': num_huevos,
                 'infectados_iniciales': infectados_iniciales,
+                'mosquitos_infectados_iniciales': mosquitos_infectados_iniciales,
                 'usar_lsm': usar_lsm,
                 'usar_itn_irs': usar_itn_irs,
                 'seed': seed,
@@ -372,10 +378,13 @@ def main():
             steps = args.steps if args.steps is not None else simulacion.get('duracion_dias', 365)
             parametros = {
                 'steps': steps,
+                'width': simulacion.get('width', 150),
+                'height': simulacion.get('height', 150),
                 'num_humanos': poblacion.get('humanos', args.humanos),
                 'num_mosquitos': poblacion.get('mosquitos_adultos', args.mosquitos),
                 'num_huevos': poblacion.get('huevos', args.huevos),
                 'infectados_iniciales': args.infectados,
+                'mosquitos_infectados_iniciales': 2,
                 'usar_lsm': control.get('lsm', {}).get('activado', args.lsm),
                 'usar_itn_irs': control.get('itn_irs', {}).get('activado', args.itn_irs),
                 'seed': args.seed,
@@ -386,10 +395,13 @@ def main():
         # Sin archivo: usar CLI o default 365
         parametros = {
             'steps': args.steps if args.steps is not None else 365,
+            'width': 150,
+            'height': 150,
             'num_humanos': args.humanos,
             'num_mosquitos': args.mosquitos,
             'num_huevos': args.huevos,
             'infectados_iniciales': args.infectados,
+            'mosquitos_infectados_iniciales': 2,
             'usar_lsm': args.lsm,
             'usar_itn_irs': args.itn_irs,
             'seed': args.seed,
