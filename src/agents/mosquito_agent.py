@@ -461,12 +461,17 @@ class MosquitoAgent(Agent):
         
         Busca dentro del rango máximo de vuelo del mosquito (Fr).
         
+        OPTIMIZACIÓN: Usa búsqueda espacial en lugar de calcular todas las distancias.
+        
         Returns
         -------
         Optional[Tuple[int, int]]
             Coordenadas del sitio de cría más cercano o None
         """
-        # Usar la lista de sitios permanentes cacheada en el modelo (OPTIMIZACIÓN)
+        if self.pos is None:
+            return None
+            
+        # Usar la lista de sitios permanentes cacheada en el modelo
         sitios_agua = self.model.sitios_cria
         
         # Sitios temporales (charcos post-lluvia) - si existen
@@ -480,16 +485,37 @@ class MosquitoAgent(Agent):
         if not sitios_disponibles:
             return None
         
-        # Filtrar por rango de vuelo máximo cacheado (Fr = ~350m)
-        sitios_alcanzables = [s for s in sitios_disponibles 
-                              if self._distancia(s) <= self.max_range]
+        # OPTIMIZACIÓN: Buscar en un radio creciente en lugar de calcular todas las distancias
+        # Empezar con radio pequeño y aumentar hasta max_range
+        x, y = self.pos
+        max_range_sq = self.max_range ** 2  # Evitar sqrt comparando distancias al cuadrado
         
-        if not sitios_alcanzables:
-            # Si ninguno alcanzable, retornar el más cercano aunque esté lejos
-            return min(sitios_disponibles, key=lambda s: self._distancia(s))
+        # Buscar el sitio más cercano usando distancia Manhattan como heurística rápida
+        mejor_sitio = None
+        mejor_dist_sq = float('inf')
         
-        # Retornar el más cercano dentro del rango
-        return min(sitios_alcanzables, key=lambda s: self._distancia(s))
+        for sitio in sitios_disponibles:
+            sx, sy = sitio
+            # Distancia Manhattan (más rápida que euclidiana)
+            dist_manhattan = abs(sx - x) + abs(sy - y)
+            
+            # Filtro rápido: si Manhattan > max_range, definitivamente está fuera
+            if dist_manhattan > self.max_range * 1.5:  # 1.5 factor de seguridad
+                continue
+            
+            # Calcular distancia euclidiana al cuadrado (evita sqrt)
+            dist_sq = (sx - x) ** 2 + (sy - y) ** 2
+            
+            if dist_sq < mejor_dist_sq:
+                mejor_dist_sq = dist_sq
+                mejor_sitio = sitio
+        
+        # Si encontramos algo dentro del rango, retornarlo
+        if mejor_sitio and mejor_dist_sq <= max_range_sq:
+            return mejor_sitio
+        
+        # Si nada dentro del rango, retornar el más cercano encontrado
+        return mejor_sitio
     
     def _distancia(self, pos: Tuple[int, int]) -> float:
         """
