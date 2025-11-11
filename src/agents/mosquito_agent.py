@@ -483,6 +483,11 @@ class MosquitoAgent(Agent):
         """
         Calcula distancia euclidiana a una posición.
         
+        NOTA: Este método asume que self.pos no es None (solo adultos llaman).
+        Los huevos/larvas/pupas tienen self.pos=None, pero están protegidos por
+        validaciones en mover(), buscar_humano_cercano() y _buscar_sitio_cria()
+        que verifican self.pos antes de llamar este método.
+        
         Parameters
         ----------
         pos : Tuple[int, int]
