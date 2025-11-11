@@ -11,7 +11,6 @@ Universidad Industrial de Santander - Simulación Digital F1
 """
 
 from mesa import Model
-#from mesa.time import RandomActivation
 from mesa.space import MultiGrid
 from mesa.datacollection import DataCollector
 import numpy as np
@@ -130,10 +129,8 @@ class DengueModel(Model):
         # Grid espacial (múltiples agentes por celda, sin toroide)
         self.grid = MultiGrid(width, height, torus=False)
         
-        # Scheduler de activación aleatoria
-        #self.schedule = RandomActivation(self)
-        
-        # Contador de steps propio (reemplaza schedule.steps en Mesa 2.1)
+        # Activación aleatoria de agentes (Mesa 2.3.4: self.agents.shuffle().do())
+        # El contador de steps se maneja manualmente para compatibilidad con batch_run
         self.steps = 0
 
         # Variables climáticas
@@ -177,6 +174,10 @@ class DengueModel(Model):
         self.lsm_activo = False
         self.itn_irs_activo = False
         
+        # Sitios de cría temporales (charcos post-lluvia)
+        # Diccionario: {posicion: dias_restantes}
+        self.sitios_cria_temporales = {}
+        
         # Mapa de celdas con tipos (urbana, parque, agua)
         self.mapa_celdas = self._inicializar_mapa_celdas()
         
@@ -210,6 +211,7 @@ class DengueModel(Model):
                 "Huevos": lambda m: self._contar_huevos(),
                 "Temperatura": lambda m: m.temperatura_actual,
                 "Precipitacion": lambda m: m.precipitacion_actual,
+                "Sitios_Temporales": lambda m: len(m.sitios_cria_temporales),
                 "LSM_Activo": lambda m: m.lsm_activo,
                 "ITN_IRS_Activo": lambda m: m.itn_irs_activo,
             },
@@ -332,6 +334,13 @@ class DengueModel(Model):
         self.rainfall_threshold = breeding.get('rainfall_threshold', 0.0)
         self.breeding_site_ratio = breeding.get('breeding_site_ratio', 0.2)
         
+        # Sitios de cría temporales (charcos post-lluvia)
+        temp_sites = breeding.get('temporary_sites', {})
+        self.temp_site_min_rainfall = temp_sites.get('min_rainfall', 5.0)  # mm mínimos
+        self.temp_site_sites_per_mm = temp_sites.get('sites_per_mm', 0.5)  # charcos/mm
+        self.temp_site_duration_days = temp_sites.get('duration_days', 7)  # días de persistencia
+        self.temp_site_max_sites = temp_sites.get('max_sites', 100)  # límite máximo
+        
         # Distribución de tipos de movilidad
         mobility_dist = config.get('population', {}).get('mobility_distribution', {})
         self.mobility_distribution_student = mobility_dist.get('student', 0.30)
@@ -427,6 +436,12 @@ class DengueModel(Model):
         self.rainfall_threshold = 0.0
         self.breeding_site_ratio = 0.2
         
+        # Sitios de cría temporales (charcos post-lluvia)
+        self.temp_site_min_rainfall = 5.0  # mm mínimos
+        self.temp_site_sites_per_mm = 0.5  # charcos/mm
+        self.temp_site_duration_days = 7  # días de persistencia
+        self.temp_site_max_sites = 100  # límite máximo
+        
         # Distribución de tipos de movilidad
         self.mobility_distribution_student = 0.30
         self.mobility_distribution_worker = 0.40
@@ -482,11 +497,14 @@ class DengueModel(Model):
         
         # 1. Actualizar clima
         self._actualizar_clima()
+        
+        # 2. Actualizar sitios de cría temporales (charcos post-lluvia)
+        self._actualizar_sitios_cria_temporales()
          
-        # 2. Aplicar estrategias de control
+        # 3. Aplicar estrategias de control
         #self._aplicar_control()
         
-        # 3. Activar todos los agentes (actualiza estados, movimiento, interacciones)
+        # 4. Activar todos los agentes (actualiza estados, movimiento, interacciones)
         self.agents.shuffle().do("step")
         
         # 4. Recolectar datos
@@ -522,6 +540,50 @@ class DengueModel(Model):
                 f"No hay datos climáticos disponibles para la fecha {self.fecha_actual.date()}. "
                 f"Verifique que la fecha esté dentro del rango del archivo CSV."
             )
+    
+    def _actualizar_sitios_cria_temporales(self):
+        """
+        Gestiona sitios de cría temporales (charcos post-lluvia).
+        
+        Lógica:
+        1. Crear nuevos charcos si precipitación >= umbral
+        2. Decrementar días restantes de charcos existentes
+        3. Eliminar charcos secos (días_restantes = 0)
+        
+        Parámetros:
+        - temp_site_min_rainfall: mm mínimos para crear charcos (5.0)
+        - temp_site_sites_per_mm: charcos por mm de lluvia (0.5)
+        - temp_site_duration_days: días que persiste un charco (7)
+        - temp_site_max_sites: límite máximo de charcos simultáneos (100)
+        """
+        # 1. Crear nuevos charcos si hay suficiente lluvia
+        if self.precipitacion_actual >= self.temp_site_min_rainfall:
+            # Calcular número de charcos a crear
+            num_nuevos = int(self.precipitacion_actual * self.temp_site_sites_per_mm)
+            
+            # Limitar al máximo permitido
+            espacio_disponible = self.temp_site_max_sites - len(self.sitios_cria_temporales)
+            num_nuevos = min(num_nuevos, espacio_disponible)
+            
+            # Crear charcos en posiciones aleatorias
+            for _ in range(num_nuevos):
+                pos = (self.random.randrange(self.width),
+                      self.random.randrange(self.height))
+                # Reiniciar duración si el sitio ya existe (lluvia renueva charco)
+                self.sitios_cria_temporales[pos] = self.temp_site_duration_days
+        
+        # 2. Decrementar días restantes y eliminar charcos secos
+        sitios_a_eliminar = []
+        for pos, dias_restantes in self.sitios_cria_temporales.items():
+            dias_restantes -= 1
+            if dias_restantes <= 0:
+                sitios_a_eliminar.append(pos)
+            else:
+                self.sitios_cria_temporales[pos] = dias_restantes
+        
+        # 3. Eliminar charcos secos
+        for pos in sitios_a_eliminar:
+            del self.sitios_cria_temporales[pos]
     
     def _aplicar_control(self):
         """

@@ -54,8 +54,6 @@ class Celda:
         Coordenadas en el grid
     es_criadero : bool
         True si es sitio de cría permanente (tipo AGUA)
-    densidad_humanos : int
-        Número de humanos en la celda (actualizado dinámicamente)
     
     Examples
     --------
@@ -74,7 +72,6 @@ class Celda:
         self.tipo = tipo
         self.pos = pos
         self.es_criadero = (tipo == TipoCelda.AGUA)
-        self.densidad_humanos = 0
     
     def es_parque(self) -> bool:
         """
@@ -111,7 +108,7 @@ class Celda:
     
     def __repr__(self) -> str:
         """Representación en cadena de la celda."""
-        return f"Celda({self.tipo.value}, pos={self.pos}, humanos={self.densidad_humanos})"
+        return f"Celda({self.tipo.value}, pos={self.pos})"
     
     def __str__(self) -> str:
         """Representación amigable de la celda."""

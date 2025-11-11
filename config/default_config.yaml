@@ -80,6 +80,13 @@ mosquito_breeding:
   immature_thermal_constant: 181.2       # K_inmaduro (°C·día) - constante térmica total
   rainfall_threshold: 0.0
   breeding_site_ratio: 0.2
+  
+  # Sitios de cría temporales (charcos post-lluvia)
+  temporary_sites:
+    min_rainfall: 5.0           # mm mínimos para crear charcos
+    sites_per_mm: 0.5           # charcos creados por mm de lluvia (ej: 10mm → 5 charcos)
+    duration_days: 7            # días que persiste un charco sin lluvia
+    max_sites: 100              # límite máximo de charcos simultáneos
 
 population:
   mobility_distribution:
