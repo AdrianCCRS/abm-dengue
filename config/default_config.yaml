@@ -28,6 +28,24 @@ transmission:
 mobility:
   # Probabilidades diarias de ubicación por tipo de agente
   # Cada fila debe sumar 1.0 (distribución de probabilidad)
+  #
+  # NOTA: Estos valores son estimaciones basadas en la conversión del modelo
+  # horario anterior (que asumía incorrectamente pasos horarios).
+  #
+  # Procedimiento de cálculo:
+  # 1. Estudiantes: 6-14h escuela (8h) → 8/24 = 33% → 35% destination
+  #                 16-20h parque (4h × 30% prob) → 10% park
+  #                 Resto → 55% home
+  # 2. Trabajadores: 7-18h oficina (11h) → 11/24 = 46% → 35% destination
+  #                  16-20h parque (4h × 10% prob) → 5% park
+  #                  Resto → 60% home
+  # 3. Móviles: Movimiento cada 2h entre 6-20h (14h activo) → 40% random
+  #             25% prob parque en horario activo → 20% park
+  #             Resto → 40% home
+  # 4. Estacionarios: Siempre en casa con 5% prob parque → 95% home, 5% park
+  #
+  # RECOMENDACIÓN: Ajustar con datos empíricos de movilidad urbana si disponibles
+  # (encuestas de movilidad, datos GPS, estudios etnográficos, etc.)
   
   student_daily_probabilities:
     home: 0.55      # En casa (mañana temprano, noche)
