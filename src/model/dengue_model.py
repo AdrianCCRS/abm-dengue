@@ -382,6 +382,38 @@ class DengueModel(Model):
         human_behavior = config.get('human_behavior', {})
         self.isolation_probability = human_behavior.get('isolation_probability', 0.7)
         self.infected_mobility_radius = human_behavior.get('infected_mobility_radius', 1)
+        
+        # Validar que las probabilidades de movilidad sumen 1.0 para cada tipo
+        self._validar_probabilidades_movilidad()
+    
+    def _validar_probabilidades_movilidad(self):
+        """
+        Valida que las probabilidades de movilidad diarias sumen 1.0 para cada tipo.
+        
+        Lanza ValueError si alguna suma de probabilidades es inválida (|suma - 1.0| > 0.01).
+        Esto previene errores de configuración que causarían comportamiento indefinido.
+        """
+        tolerancia = 0.01  # Tolerancia para errores de redondeo
+        
+        tipos_validar = [
+            ("Estudiante", self.student_prob_home, self.student_prob_destination, 
+             self.student_prob_park, 0.0),
+            ("Trabajador", self.worker_prob_home, self.worker_prob_destination, 
+             self.worker_prob_park, 0.0),
+            ("Móvil Continuo", self.mobile_prob_home, self.mobile_prob_destination, 
+             self.mobile_prob_park, self.mobile_prob_random),
+            ("Estacionario", self.stationary_prob_home, self.stationary_prob_destination, 
+             self.stationary_prob_park, self.stationary_prob_random)
+        ]
+        
+        for nombre, p_home, p_dest, p_park, p_random in tipos_validar:
+            suma = p_home + p_dest + p_park + p_random
+            if abs(suma - 1.0) > tolerancia:
+                raise ValueError(
+                    f"Probabilidades de movilidad para '{nombre}' no suman 1.0: "
+                    f"home={p_home}, destination={p_dest}, park={p_park}, random={p_random} "
+                    f"(suma={suma:.4f}). Revise la configuración."
+                )
     
     def _cargar_configuracion_default(self):
         """Carga configuración por defecto si no se proporciona config."""
@@ -474,6 +506,9 @@ class DengueModel(Model):
         # Parámetros de comportamiento humano
         self.isolation_probability = 0.7  # 70% se aíslan
         self.infected_mobility_radius = 1  # 1 celda de radio
+        
+        # Validar que las probabilidades de movilidad sumen 1.0 para cada tipo
+        self._validar_probabilidades_movilidad()
     
     def step(self):
         """
