@@ -138,10 +138,16 @@ class MosquitoAgent(Agent):
         - HUEVO: Verificar si eclosiona (depende de temperatura)
         - ADULTO: Moverse, buscar humanos (hembras), aparearse, reproducir
         """
-        if self.etapa == EtapaVida.HUEVO:
-            self.procesar_desarrollo_huevo()
-        else:  # ADULTO
-            self.procesar_comportamiento_adulto()
+        try:
+            if self.etapa == EtapaVida.HUEVO:
+                self.procesar_desarrollo_huevo()
+            else:  # ADULTO
+                self.procesar_comportamiento_adulto()
+        except Exception as e:
+            print(f"\n❌ ERROR en MosquitoAgent.step() [id={self.unique_id}]: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
     
     def procesar_desarrollo_huevo(self):
         """
@@ -231,10 +237,18 @@ class MosquitoAgent(Agent):
             return
         
         # 2. Movimiento
-        self.mover()
+        try:
+            self.mover()
+        except Exception as e:
+            print(f"\n❌ ERROR en mover() [mosquito id={self.unique_id}, pos={self.pos}]: {e}")
+            raise
         
         # 3. Picar humano
-        self.intentar_picar()
+        try:
+            self.intentar_picar()
+        except Exception as e:
+            print(f"\n❌ ERROR en intentar_picar() [mosquito id={self.unique_id}]: {e}")
+            raise
         
         # 4. Apareamiento (implícito: probabilidad de encontrar macho)
         if not self.esta_apareado:
@@ -242,7 +256,11 @@ class MosquitoAgent(Agent):
         
         # 5. Reproducción
         if self.esta_apareado and self.ha_picado_hoy:
-            self.intentar_reproduccion()
+            try:
+                self.intentar_reproduccion()
+            except Exception as e:
+                print(f"\n❌ ERROR en intentar_reproduccion() [mosquito id={self.unique_id}]: {e}")
+                raise
     
     def mover(self):
         """
@@ -470,7 +488,11 @@ class MosquitoAgent(Agent):
         """
         if self.pos is None:
             return None
-            
+        
+        # Log para detectar si esto es el cuello de botella
+        import time
+        start = time.time()
+        
         # Usar la lista de sitios permanentes cacheada en el modelo
         sitios_agua = self.model.sitios_cria
         
@@ -485,6 +507,10 @@ class MosquitoAgent(Agent):
         if not sitios_disponibles:
             return None
         
+        # Log cuando hay muchos sitios
+        if len(sitios_disponibles) > 1000:
+            print(f"\n⚠️  Mosquito {self.unique_id}: Buscando entre {len(sitios_disponibles)} sitios...", flush=True)
+        
         # OPTIMIZACIÓN: Buscar en un radio creciente en lugar de calcular todas las distancias
         # Empezar con radio pequeño y aumentar hasta max_range
         x, y = self.pos
@@ -494,6 +520,7 @@ class MosquitoAgent(Agent):
         mejor_sitio = None
         mejor_dist_sq = float('inf')
         
+        sitios_evaluados = 0
         for sitio in sitios_disponibles:
             sx, sy = sitio
             # Distancia Manhattan (más rápida que euclidiana)
@@ -503,12 +530,18 @@ class MosquitoAgent(Agent):
             if dist_manhattan > self.max_range * 1.5:  # 1.5 factor de seguridad
                 continue
             
+            sitios_evaluados += 1
+            
             # Calcular distancia euclidiana al cuadrado (evita sqrt)
             dist_sq = (sx - x) ** 2 + (sy - y) ** 2
             
             if dist_sq < mejor_dist_sq:
                 mejor_dist_sq = dist_sq
                 mejor_sitio = sitio
+        
+        elapsed = time.time() - start
+        if elapsed > 0.1:  # Si tarda más de 100ms
+            print(f"\n🐌 Búsqueda lenta: {elapsed:.3f}s para evaluar {sitios_evaluados}/{len(sitios_disponibles)} sitios", flush=True)
         
         # Si encontramos algo dentro del rango, retornarlo
         if mejor_sitio and mejor_dist_sq <= max_range_sq:
