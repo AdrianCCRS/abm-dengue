@@ -103,29 +103,29 @@ class MosquitoAgent(Agent):
         self.dias_cooldown_reproduccion = 3  # Mínimo 3 días entre puestas (ciclo gonotrófico)
         
         # Parámetros desde configuración del modelo (cacheados para rendimiento)
-        self.tasa_mortalidad = model.mortalidad_mosquito
-        self.rango_sensorial = model.rango_sensorial_mosquito
-        self.prob_apareamiento = model.prob_apareamiento_mosquito
-        self.huevos_por_hembra = model.huevos_por_hembra
+        self.tasa_mortalidad = model.mortality_rate
+        self.rango_sensorial = model.sensory_range
+        self.prob_apareamiento = model.mating_probability
+        self.huevos_por_hembra = model.eggs_per_female
         
         # Parámetros de desarrollo de huevos (cacheados)
-        self.dias_base_desarrollo_huevo = model.dias_base_desarrollo_huevo
-        self.temp_optima_desarrollo_huevo = model.temp_optima_desarrollo_huevo
-        self.sensibilidad_temp_desarrollo_huevo = model.sensibilidad_temp_desarrollo_huevo
+        self.dias_base_desarrollo_huevo = model.egg_to_adult_base_days
+        self.temp_optima_desarrollo_huevo = model.egg_to_adult_temp_optimal
+        self.sensibilidad_temp_desarrollo_huevo = model.egg_to_adult_temp_sensitivity
         
         # Parámetros de transmisión (cacheados)
-        self.prob_transmision_mosquito_humano = model.prob_transmision_mosquito_humano  # α
-        self.prob_transmision_humano_mosquito = model.prob_transmision_humano_mosquito  # β
+        self.prob_transmision_mosquito_humano = model.mosquito_to_human_prob  # α
+        self.prob_transmision_humano_mosquito = model.human_to_mosquito_prob  # β
         
         # Parámetros de reproducción (cacheados)
-        self.umbral_precipitacion_cria = model.umbral_precipitacion_cria
-        self.proporcion_hembras = model.proporcion_hembras
-        self.dias_base_maduracion_huevo = model.dias_base_maduracion_huevo
-        self.temp_optima_maduracion_huevo = model.temp_optima_maduracion_huevo
-        self.sensibilidad_temp_maduracion_huevo = model.sensibilidad_temp_maduracion_huevo
+        self.umbral_precipitacion_cria = model.rainfall_threshold
+        self.proporcion_hembras = model.female_ratio
+        self.dias_base_maduracion_huevo = model.egg_maturation_base_days
+        self.temp_optima_maduracion_huevo = model.egg_maturation_temp_optimal
+        self.sensibilidad_temp_maduracion_huevo = model.egg_maturation_temp_sensitivity
         
         # Parámetros de movimiento (cacheados)
-        self.rango_vuelo_max = model.rango_vuelo_max
+        self.rango_vuelo_max = model.max_range
     
     def step(self):
         """
