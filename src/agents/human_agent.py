@@ -93,36 +93,36 @@ class HumanAgent(Agent):
         self.pos_hogar = pos_hogar
         self.pos_destino = pos_destino  # Escuela/oficina
         self.pos_actual = pos_hogar
-        self.prob_aislamiento = getattr(model, 'prob_aislamiento', 0.7)  # 70% por defecto
+        self.prob_aislamiento = getattr(model, 'isolation_probability', 0.7)  # 70% por defecto
         self.en_aislamiento = False
         
         # Métricas
         self.num_picaduras = 0
         
         # Parámetros del modelo SEIR (cacheados para rendimiento)
-        self.duracion_expuesto = model.incubacion_humano  # Ne = 5 días
-        self.duracion_infectado = model.infeccioso_humano  # Ni = 6 días
-        self.radio_mov_infectado = model.radio_mov_infectado  # Radio restringido cuando infectado
+        self.duracion_expuesto = model.incubation_period  # Ne = 5 días
+        self.duracion_infectado = model.infectious_period  # Ni = 6 días
+        self.radio_mov_infectado = model.infected_mobility_radius  # Radio restringido cuando infectado
         
         # Probabilidades de visita a parque según tipo (cacheadas)
         park_probs = {
-            TipoMovilidad.ESTUDIANTE: model.prob_parque_estudiante,
-            TipoMovilidad.TRABAJADOR: model.prob_parque_trabajador,
-            TipoMovilidad.MOVIL_CONTINUO: model.prob_parque_movil,
-            TipoMovilidad.ESTACIONARIO: model.prob_parque_estacionario
+            TipoMovilidad.ESTUDIANTE: model.park_probability_student,
+            TipoMovilidad.TRABAJADOR: model.park_probability_worker,
+            TipoMovilidad.MOVIL_CONTINUO: model.park_probability_mobile,
+            TipoMovilidad.ESTACIONARIO: model.park_probability_stationary
         }
         self.prob_parque = park_probs.get(tipo_movilidad, 0.1)
         
         # Parámetros de horarios (cacheados)
-        self.hora_inicio_escuela = model.hora_inicio_escuela
-        self.hora_fin_escuela = model.hora_fin_escuela
-        self.hora_inicio_trabajo = model.hora_inicio_trabajo
-        self.hora_fin_trabajo = model.hora_fin_trabajo
-        self.hora_inicio_parque = model.hora_inicio_parque
-        self.hora_fin_parque = model.hora_fin_parque
-        self.intervalo_movimiento_horas = model.intervalo_movimiento_horas
-        self.hora_inicio_movil_activo = model.hora_inicio_movil_activo
-        self.hora_fin_movil_activo = model.hora_fin_movil_activo
+        self.hora_inicio_escuela = model.school_start_hour
+        self.hora_fin_escuela = model.school_end_hour
+        self.hora_inicio_trabajo = model.work_start_hour
+        self.hora_fin_trabajo = model.work_end_hour
+        self.hora_inicio_parque = model.park_start_hour
+        self.hora_fin_parque = model.park_end_hour
+        self.intervalo_movimiento_horas = model.mobile_move_interval_hours
+        self.hora_inicio_movil_activo = model.mobile_active_start_hour
+        self.hora_fin_movil_activo = model.mobile_active_end_hour
     
     def step(self):
         """
