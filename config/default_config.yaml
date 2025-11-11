@@ -26,23 +26,30 @@ transmission:
   human_to_mosquito_prob: 0.275
 
 mobility:
-  park_probability_student:    0.3
-  park_probability_worker:     0.1
-  park_probability_mobile:     0.25
-  park_probability_stationary: 0.05
-
-  school_start_hour: 6
-  school_end_hour:   14
-
-  work_start_hour: 7
-  work_end_hour:   18
-
-  park_start_hour: 16
-  park_end_hour:   20
-
-  mobile_move_interval_hours: 2
-  mobile_active_start_hour:   6
-  mobile_active_end_hour:     20
+  # Probabilidades diarias de ubicación por tipo de agente
+  # Cada fila debe sumar 1.0 (distribución de probabilidad)
+  
+  student_daily_probabilities:
+    home: 0.55      # En casa (mañana temprano, noche)
+    destination: 0.35  # En escuela (día)
+    park: 0.10      # En parque (tarde)
+  
+  worker_daily_probabilities:
+    home: 0.60      # En casa
+    destination: 0.35  # En oficina
+    park: 0.05      # En parque
+  
+  mobile_daily_probabilities:
+    home: 0.40      # En casa
+    destination: 0.0   # Sin destino fijo
+    park: 0.20      # En parque
+    random: 0.40    # Ubicación aleatoria
+  
+  stationary_daily_probabilities:
+    home: 0.95      # Casi siempre en casa
+    destination: 0.0
+    park: 0.05      # Rara vez en parque
+    random: 0.0
 
 
 mosquito_breeding:

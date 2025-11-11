@@ -289,23 +289,34 @@ class DengueModel(Model):
         self.mosquito_to_human_prob = transmission.get('mosquito_to_human_prob', 0.6)  # α
         self.human_to_mosquito_prob = transmission.get('human_to_mosquito_prob', 0.275)  # β
         
-        # Parámetros de movilidad humana
+        # Parámetros de movilidad humana (probabilidades diarias por tipo)
         mobility = config.get('mobility', {})
-        self.park_probability_student = mobility.get('park_probability_student', 0.3)
-        self.park_probability_worker = mobility.get('park_probability_worker', 0.1)
-        self.park_probability_mobile = mobility.get('park_probability_mobile', 0.25)
-        self.park_probability_stationary = mobility.get('park_probability_stationary', 0.05)
         
-        self.school_start_hour = mobility.get('school_start_hour', 6)
-        self.school_end_hour = mobility.get('school_end_hour', 14)
-        self.work_start_hour = mobility.get('work_start_hour', 7)
-        self.work_end_hour = mobility.get('work_end_hour', 18)
-        self.park_start_hour = mobility.get('park_start_hour', 16)
-        self.park_end_hour = mobility.get('park_end_hour', 20)
+        # Estudiantes (Tipo 1)
+        student_probs = mobility.get('student_daily_probabilities', {})
+        self.student_prob_home = student_probs.get('home', 0.55)
+        self.student_prob_destination = student_probs.get('destination', 0.35)
+        self.student_prob_park = student_probs.get('park', 0.10)
         
-        self.mobile_move_interval_hours = mobility.get('mobile_move_interval_hours', 2)
-        self.mobile_active_start_hour = mobility.get('mobile_active_start_hour', 6)
-        self.mobile_active_end_hour = mobility.get('mobile_active_end_hour', 20)
+        # Trabajadores (Tipo 2)
+        worker_probs = mobility.get('worker_daily_probabilities', {})
+        self.worker_prob_home = worker_probs.get('home', 0.60)
+        self.worker_prob_destination = worker_probs.get('destination', 0.35)
+        self.worker_prob_park = worker_probs.get('park', 0.05)
+        
+        # Móviles continuos (Tipo 3)
+        mobile_probs = mobility.get('mobile_daily_probabilities', {})
+        self.mobile_prob_home = mobile_probs.get('home', 0.40)
+        self.mobile_prob_destination = mobile_probs.get('destination', 0.0)
+        self.mobile_prob_park = mobile_probs.get('park', 0.20)
+        self.mobile_prob_random = mobile_probs.get('random', 0.40)
+        
+        # Estacionarios (Tipo 4)
+        stationary_probs = mobility.get('stationary_daily_probabilities', {})
+        self.stationary_prob_home = stationary_probs.get('home', 0.95)
+        self.stationary_prob_destination = stationary_probs.get('destination', 0.0)
+        self.stationary_prob_park = stationary_probs.get('park', 0.05)
+        self.stationary_prob_random = stationary_probs.get('random', 0.0)
         
         # Parámetros de reproducción de mosquitos
         breeding = config.get('mosquito_breeding', {})
@@ -381,22 +392,28 @@ class DengueModel(Model):
         self.mosquito_to_human_prob = 0.6  # α = 0.6
         self.human_to_mosquito_prob = 0.275  # β = 0.275
         
-        # Parámetros de movilidad humana
-        self.park_probability_student = 0.3
-        self.park_probability_worker = 0.1
-        self.park_probability_mobile = 0.25
-        self.park_probability_stationary = 0.05
+        # Parámetros de movilidad humana (probabilidades diarias por tipo)
+        # Estudiantes (Tipo 1)
+        self.student_prob_home = 0.55
+        self.student_prob_destination = 0.35
+        self.student_prob_park = 0.10
         
-        self.school_start_hour = 6
-        self.school_end_hour = 14
-        self.work_start_hour = 7
-        self.work_end_hour = 18
-        self.park_start_hour = 16
-        self.park_end_hour = 20
+        # Trabajadores (Tipo 2)
+        self.worker_prob_home = 0.60
+        self.worker_prob_destination = 0.35
+        self.worker_prob_park = 0.05
         
-        self.mobile_move_interval_hours = 2
-        self.mobile_active_start_hour = 6
-        self.mobile_active_end_hour = 20
+        # Móviles continuos (Tipo 3)
+        self.mobile_prob_home = 0.40
+        self.mobile_prob_destination = 0.0
+        self.mobile_prob_park = 0.20
+        self.mobile_prob_random = 0.40
+        
+        # Estacionarios (Tipo 4)
+        self.stationary_prob_home = 0.95
+        self.stationary_prob_destination = 0.0
+        self.stationary_prob_park = 0.05
+        self.stationary_prob_random = 0.0
         
         # Parámetros de reproducción de mosquitos
         self.eggs_per_female = 100

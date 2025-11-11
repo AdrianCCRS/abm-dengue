@@ -104,25 +104,27 @@ class HumanAgent(Agent):
         self.infectious_period = model.infectious_period  # Ni = 6 días
         self.infected_mobility_radius = model.infected_mobility_radius  # Radio restringido cuando infectado
         
-        # Probabilidades de visita a parque según tipo (cacheadas)
-        park_probs = {
-            TipoMovilidad.ESTUDIANTE: model.park_probability_student,
-            TipoMovilidad.TRABAJADOR: model.park_probability_worker,
-            TipoMovilidad.MOVIL_CONTINUO: model.park_probability_mobile,
-            TipoMovilidad.ESTACIONARIO: model.park_probability_stationary
-        }
-        self.prob_parque = park_probs.get(tipo_movilidad, 0.1)
-        
-        # Parámetros de horarios (cacheados)
-        self.school_start_hour = model.school_start_hour
-        self.school_end_hour = model.school_end_hour
-        self.work_start_hour = model.work_start_hour
-        self.work_end_hour = model.work_end_hour
-        self.park_start_hour = model.park_start_hour
-        self.park_end_hour = model.park_end_hour
-        self.mobile_move_interval_hours = model.mobile_move_interval_hours
-        self.mobile_active_start_hour = model.mobile_active_start_hour
-        self.mobile_active_end_hour = model.mobile_active_end_hour
+        # Probabilidades diarias de ubicación por tipo (cacheadas)
+        if tipo_movilidad == TipoMovilidad.ESTUDIANTE:
+            self.prob_home = model.student_prob_home
+            self.prob_destination = model.student_prob_destination
+            self.prob_park = model.student_prob_park
+            self.prob_random = 0.0  # Estudiantes no tienen movimiento aleatorio
+        elif tipo_movilidad == TipoMovilidad.TRABAJADOR:
+            self.prob_home = model.worker_prob_home
+            self.prob_destination = model.worker_prob_destination
+            self.prob_park = model.worker_prob_park
+            self.prob_random = 0.0  # Trabajadores no tienen movimiento aleatorio
+        elif tipo_movilidad == TipoMovilidad.MOVIL_CONTINUO:
+            self.prob_home = model.mobile_prob_home
+            self.prob_destination = model.mobile_prob_destination
+            self.prob_park = model.mobile_prob_park
+            self.prob_random = model.mobile_prob_random
+        else:  # ESTACIONARIO
+            self.prob_home = model.stationary_prob_home
+            self.prob_destination = model.stationary_prob_destination
+            self.prob_park = model.stationary_prob_park
+            self.prob_random = model.stationary_prob_random
     
     def step(self):
         """
@@ -198,13 +200,13 @@ class HumanAgent(Agent):
     
     def ejecutar_movilidad_diaria(self):
         """
-        Determina y ejecuta el movimiento diario según tipo y hora.
+        Determina y ejecuta el movimiento diario según probabilidades.
         
-        Reglas de movilidad:
-        - Tipo 1 (Estudiante): Hogar → Escuela (7AM-3PM) → Hogar (+parque opcional)
-        - Tipo 2 (Trabajador): Hogar → Oficina (7AM-variable) → Hogar (+parque opcional)
-        - Tipo 3 (Móvil continuo): Cambia ubicación cada 2 horas
-        - Tipo 4 (Estacionario): Permanece en hogar
+        Reglas de movilidad (basadas en probabilidades diarias):
+        - Tipo 1 (Estudiante): 55% hogar, 35% escuela, 10% parque
+        - Tipo 2 (Trabajador): 60% hogar, 35% oficina, 5% parque
+        - Tipo 3 (Móvil continuo): 40% hogar, 20% parque, 40% aleatorio
+        - Tipo 4 (Estacionario): 95% hogar, 5% parque
         
         NOTA: Los infectados (estado I) tienen comportamiento especial:
         - Con prob_aislamiento: permanecen en casa (aislamiento completo)
@@ -233,63 +235,34 @@ class HumanAgent(Agent):
                 self.mover_a(nueva_pos)
                 return
         
-        # Obtener hora simulada (simplificado: usar contador de steps del modelo)
-        hora_del_dia = self.model.steps % 24
+        # Agentes no infectados: usar probabilidades diarias
+        # Generar número aleatorio [0, 1)
+        rand = self.random.random()
         
-        if self.tipo == TipoMovilidad.ESTUDIANTE:
-            self._movilidad_estudiante(hora_del_dia)
-            
-        elif self.tipo == TipoMovilidad.TRABAJADOR:
-            self._movilidad_trabajador(hora_del_dia)
-            
-        elif self.tipo == TipoMovilidad.MOVIL_CONTINUO:
-            self._movilidad_movil_continuo(hora_del_dia)
-            
-        elif self.tipo == TipoMovilidad.ESTACIONARIO:
+        # Acumular probabilidades para selección ponderada
+        if rand < self.prob_home:
+            # Ir a casa
             self.mover_a(self.pos_hogar)
-    
-    def _movilidad_estudiante(self, hora: int):
-        """Patrón de movilidad para estudiantes (Tipo 1)."""
-        # Usar horarios cacheados
-        if self.school_start_hour <= hora < self.school_end_hour:  # En escuela
+        elif rand < self.prob_home + self.prob_destination:
+            # Ir a destino (escuela/oficina) si existe
             if self.pos_destino:
                 self.mover_a(self.pos_destino)
-        elif self.park_start_hour <= hora < self.park_end_hour:  # Posible visita a parque
-            if self.random.random() < self.prob_parque:
-                parque = self._obtener_parque_cercano()
-                if parque:
-                    self.mover_a(parque)
             else:
-                self.mover_a(self.pos_hogar)
-        else:  # Resto del día: en hogar
-            self.mover_a(self.pos_hogar)
-    
-    def _movilidad_trabajador(self, hora: int):
-        """Patrón de movilidad para trabajadores (Tipo 2)."""
-        # Usar horarios cacheados
-        if self.work_start_hour <= hora < self.work_end_hour:  # En oficina
-            if self.pos_destino:
-                self.mover_a(self.pos_destino)
-        elif self.park_start_hour <= hora < self.park_end_hour:  # Posible visita a parque
-            if self.random.random() < self.prob_parque:
-                parque = self._obtener_parque_cercano()
-                if parque:
-                    self.mover_a(parque)
+                self.mover_a(self.pos_hogar)  # Fallback a casa
+        elif rand < self.prob_home + self.prob_destination + self.prob_park:
+            # Ir a parque
+            parque = self._obtener_parque_cercano()
+            if parque:
+                self.mover_a(parque)
             else:
-                self.mover_a(self.pos_hogar)
-        else:  # Resto del día: en hogar
-            self.mover_a(self.pos_hogar)
-    
-    def _movilidad_movil_continuo(self, hora: int):
-        """Patrón de movilidad para móviles continuos (Tipo 3)."""
-        # Usar parámetros cacheados
-        if self.mobile_active_start_hour <= hora < self.mobile_active_end_hour:  # Horario activo
-            # Cambiar ubicación según intervalo
-            if hora % self.mobile_move_interval_hours == 0:
+                self.mover_a(self.pos_hogar)  # Fallback a casa si no hay parque
+        else:
+            # Movimiento aleatorio (solo para móviles continuos)
+            if self.prob_random > 0:
                 nueva_pos = self._obtener_posicion_aleatoria()
                 self.mover_a(nueva_pos)
-        else:  # Resto del día: en hogar
-            self.mover_a(self.pos_hogar)
+            else:
+                self.mover_a(self.pos_hogar)  # Fallback a casa
     
     def mover_a(self, nueva_pos: Tuple[int, int]):
         """
