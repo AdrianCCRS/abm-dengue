@@ -186,6 +186,7 @@ class MosquitoAgent(Agent):
         self.etapa = EtapaVida.ADULTO
         self.dias_como_huevo = 0
         self.edad = 0
+        self.grados_acumulados = 0.0        
         
         # Colocar en el sitio de cría
         if self.sitio_cria and not self.pos:
@@ -257,11 +258,12 @@ class MosquitoAgent(Agent):
         self.mover_aleatorio()
     
     def mover_aleatorio(self):
-        """Movimiento aleatorio a una celda vecina (Moore neighborhood)."""
+        """Movimiento aleatorio dentro del rango de vuelo diario (Fr)."""
         vecindad = self.model.grid.get_neighborhood(
             self.pos,
             moore=True,
-            include_center=False
+            include_center=False,
+            radius=self.max_range  # Rango de vuelo del mosquito (por defecto 5 celdas ~190m)
         )
         nueva_pos = self.random.choice(vecindad)
         self.model.grid.move_agent(self, nueva_pos)
