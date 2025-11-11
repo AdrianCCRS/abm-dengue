@@ -184,6 +184,11 @@ class DengueModel(Model):
         # Sitios de cría (desde mapa de celdas)
         self.sitios_cria = self._generar_sitios_cria()
         
+        # Índice espacial para búsqueda rápida de sitios de cría
+        # Divide el grid en sectores de tamaño sector_size x sector_size
+        self.sector_size = 10  # Cada sector es 10x10 celdas
+        self.indice_sitios = self._crear_indice_espacial_sitios()
+        
         # Cache de parques para búsqueda rápida (evita iterar sobre todas las celdas)
         self.parques = self._generar_lista_parques()
         
@@ -555,35 +560,10 @@ class DengueModel(Model):
         #self._aplicar_control()
         
         # 4. Activar todos los agentes (actualiza estados, movimiento, interacciones)
-        print(f"\n🔄 Activando {len(self.agents)} agentes...", flush=True)
-        import time
-        start_time = time.time()
-        
-        # Contar tipos de agentes
-        from src.agents.human_agent import HumanAgent
-        from src.agents.mosquito_agent import MosquitoAgent
-        humanos = sum(1 for a in self.agents if isinstance(a, HumanAgent))
-        mosquitos = sum(1 for a in self.agents if isinstance(a, MosquitoAgent))
-        print(f"   👥 Humanos: {humanos}, 🦟 Mosquitos: {mosquitos}", flush=True)
-        
-        try:
-            # Activar con contador de progreso
-            agentes_lista = list(self.agents)
-            self.random.shuffle(agentes_lista)
-            
-            for idx, agente in enumerate(agentes_lista):
-                if idx % 500 == 0:
-                    elapsed = time.time() - start_time
-                    print(f"   Procesando agente {idx}/{len(agentes_lista)} ({idx/len(agentes_lista)*100:.1f}%) - {elapsed:.2f}s", flush=True)
-                agente.step()
-            
-            elapsed = time.time() - start_time
-            print(f"✅ Agentes activados en {elapsed:.2f}s", flush=True)
-        except Exception as e:
-            print(f"\n❌ ERROR activando agentes: {e}")
-            import traceback
-            traceback.print_exc()
-            raise
+        agentes_lista = list(self.agents)
+        self.random.shuffle(agentes_lista)
+        for agente in agentes_lista:
+            agente.step()
         
         # 4. Recolectar datos
         self.datacollector.collect(self)
@@ -859,6 +839,77 @@ class DengueModel(Model):
                  if celda.tipo == TipoCelda.AGUA]
         
         return sitios
+    
+    def _crear_indice_espacial_sitios(self) -> Dict[Tuple[int, int], List[Tuple[int, int]]]:
+        """
+        Crea un índice espacial dividiendo el grid en sectores.
+        
+        Cada sector contiene la lista de sitios de cría en esa región.
+        Esto permite búsqueda O(1) en lugar de O(n) para encontrar sitios cercanos.
+        
+        Returns
+        -------
+        Dict[Tuple[int, int], List[Tuple[int, int]]]
+            Diccionario {(sector_x, sector_y): [lista de sitios en ese sector]}
+        """
+        indice = {}
+        
+        # Asignar cada sitio a su sector correspondiente
+        for sitio in self.sitios_cria:
+            x, y = sitio
+            sector_x = x // self.sector_size
+            sector_y = y // self.sector_size
+            sector = (sector_x, sector_y)
+            
+            if sector not in indice:
+                indice[sector] = []
+            indice[sector].append(sitio)
+        
+        return indice
+    
+    def obtener_sitios_cercanos(self, posicion: Tuple[int, int], 
+                                 max_range: int) -> List[Tuple[int, int]]:
+        """
+        Obtiene sitios de cría cercanos usando el índice espacial.
+        
+        Solo busca en los sectores que podrían contener sitios dentro del rango.
+        Esto reduce drásticamente el número de comparaciones de distancia.
+        
+        Parameters
+        ----------
+        posicion : Tuple[int, int]
+            Posición desde donde buscar
+        max_range : int
+            Rango máximo de búsqueda
+            
+        Returns
+        -------
+        List[Tuple[int, int]]
+            Lista de sitios de cría dentro del rango (permanentes + temporales)
+        """
+        x, y = posicion
+        
+        # Calcular sectores a revisar (sector actual + vecinos alcanzables)
+        sector_x = x // self.sector_size
+        sector_y = y // self.sector_size
+        
+        # Número de sectores a revisar en cada dirección
+        # (max_range podría cruzar múltiples sectores)
+        sectores_radio = (max_range // self.sector_size) + 1
+        
+        sitios_candidatos = []
+        
+        # Revisar solo sectores relevantes
+        for dx in range(-sectores_radio, sectores_radio + 1):
+            for dy in range(-sectores_radio, sectores_radio + 1):
+                sector = (sector_x + dx, sector_y + dy)
+                if sector in self.indice_sitios:
+                    sitios_candidatos.extend(self.indice_sitios[sector])
+        
+        # Incluir sitios temporales (charcos post-lluvia)
+        sitios_candidatos.extend(self.sitios_cria_temporales.keys())
+        
+        return sitios_candidatos
     
     def _generar_lista_parques(self) -> List[Tuple[int, int]]:
         """

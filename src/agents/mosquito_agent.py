@@ -138,16 +138,10 @@ class MosquitoAgent(Agent):
         - HUEVO: Verificar si eclosiona (depende de temperatura)
         - ADULTO: Moverse, buscar humanos (hembras), aparearse, reproducir
         """
-        try:
-            if self.etapa == EtapaVida.HUEVO:
-                self.procesar_desarrollo_huevo()
-            else:  # ADULTO
-                self.procesar_comportamiento_adulto()
-        except Exception as e:
-            print(f"\n❌ ERROR en MosquitoAgent.step() [id={self.unique_id}]: {e}")
-            import traceback
-            traceback.print_exc()
-            raise
+        if self.etapa == EtapaVida.HUEVO:
+            self.procesar_desarrollo_huevo()
+        else:  # ADULTO
+            self.procesar_comportamiento_adulto()
     
     def procesar_desarrollo_huevo(self):
         """
@@ -237,18 +231,10 @@ class MosquitoAgent(Agent):
             return
         
         # 2. Movimiento
-        try:
-            self.mover()
-        except Exception as e:
-            print(f"\n❌ ERROR en mover() [mosquito id={self.unique_id}, pos={self.pos}]: {e}")
-            raise
+        self.mover()
         
         # 3. Picar humano
-        try:
-            self.intentar_picar()
-        except Exception as e:
-            print(f"\n❌ ERROR en intentar_picar() [mosquito id={self.unique_id}]: {e}")
-            raise
+        self.intentar_picar()
         
         # 4. Apareamiento (implícito: probabilidad de encontrar macho)
         if not self.esta_apareado:
@@ -256,11 +242,7 @@ class MosquitoAgent(Agent):
         
         # 5. Reproducción
         if self.esta_apareado and self.ha_picado_hoy:
-            try:
-                self.intentar_reproduccion()
-            except Exception as e:
-                print(f"\n❌ ERROR en intentar_reproduccion() [mosquito id={self.unique_id}]: {e}")
-                raise
+            self.intentar_reproduccion()
     
     def mover(self):
         """
@@ -479,7 +461,7 @@ class MosquitoAgent(Agent):
         
         Busca dentro del rango máximo de vuelo del mosquito (Fr).
         
-        OPTIMIZACIÓN: Usa búsqueda espacial en lugar de calcular todas las distancias.
+        OPTIMIZACIÓN: Usa índice espacial del modelo para búsqueda O(1) en lugar de O(n).
         
         Returns
         -------
@@ -489,65 +471,31 @@ class MosquitoAgent(Agent):
         if self.pos is None:
             return None
         
-        # Log para detectar si esto es el cuello de botella
-        import time
-        start = time.time()
+        # Obtener sitios cercanos usando el índice espacial del modelo
+        # Esto solo busca en sectores relevantes (mucho más rápido)
+        sitios_candidatos = self.model.obtener_sitios_cercanos(self.pos, self.max_range)
         
-        # Usar la lista de sitios permanentes cacheada en el modelo
-        sitios_agua = self.model.sitios_cria
-        
-        # Sitios temporales (charcos post-lluvia) - si existen
-        sitios_temp = []
-        if hasattr(self.model, 'sitios_cria_temporales'):
-            sitios_temp = list(self.model.sitios_cria_temporales.keys())
-        
-        # Combinar todos los sitios disponibles
-        sitios_disponibles = sitios_agua + sitios_temp
-        
-        if not sitios_disponibles:
+        if not sitios_candidatos:
             return None
         
-        # Log cuando hay muchos sitios
-        if len(sitios_disponibles) > 1000:
-            print(f"\n⚠️  Mosquito {self.unique_id}: Buscando entre {len(sitios_disponibles)} sitios...", flush=True)
-        
-        # OPTIMIZACIÓN: Buscar en un radio creciente en lugar de calcular todas las distancias
-        # Empezar con radio pequeño y aumentar hasta max_range
+        # Buscar el sitio más cercano dentro del rango
         x, y = self.pos
-        max_range_sq = self.max_range ** 2  # Evitar sqrt comparando distancias al cuadrado
+        max_range_sq = self.max_range ** 2  # Comparar distancias al cuadrado (evita sqrt)
         
-        # Buscar el sitio más cercano usando distancia Manhattan como heurística rápida
         mejor_sitio = None
         mejor_dist_sq = float('inf')
         
-        sitios_evaluados = 0
-        for sitio in sitios_disponibles:
+        for sitio in sitios_candidatos:
             sx, sy = sitio
-            # Distancia Manhattan (más rápida que euclidiana)
-            dist_manhattan = abs(sx - x) + abs(sy - y)
             
-            # Filtro rápido: si Manhattan > max_range, definitivamente está fuera
-            if dist_manhattan > self.max_range * 1.5:  # 1.5 factor de seguridad
-                continue
-            
-            sitios_evaluados += 1
-            
-            # Calcular distancia euclidiana al cuadrado (evita sqrt)
+            # Calcular distancia euclidiana al cuadrado
             dist_sq = (sx - x) ** 2 + (sy - y) ** 2
             
-            if dist_sq < mejor_dist_sq:
+            # Verificar si está dentro del rango y es más cercano
+            if dist_sq <= max_range_sq and dist_sq < mejor_dist_sq:
                 mejor_dist_sq = dist_sq
                 mejor_sitio = sitio
         
-        elapsed = time.time() - start
-        if elapsed > 0.1:  # Si tarda más de 100ms
-            print(f"\n🐌 Búsqueda lenta: {elapsed:.3f}s para evaluar {sitios_evaluados}/{len(sitios_disponibles)} sitios", flush=True)
-        
-        # Si encontramos algo dentro del rango, retornarlo
-        if mejor_sitio and mejor_dist_sq <= max_range_sq:
-            return mejor_sitio
-        
-        # Si nada dentro del rango, retornar el más cercano encontrado
         return mejor_sitio
     
     def _distancia(self, pos: Tuple[int, int]) -> float:
