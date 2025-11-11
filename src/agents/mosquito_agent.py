@@ -108,10 +108,13 @@ class MosquitoAgent(Agent):
         self.mating_probability = model.mating_probability
         self.eggs_per_female = model.eggs_per_female
         
-        # Parámetros de desarrollo de huevos (cacheados)
-        self.egg_to_adult_base_days = model.egg_to_adult_base_days
-        self.egg_to_adult_temp_optimal = model.egg_to_adult_temp_optimal
-        self.egg_to_adult_temp_sensitivity = model.egg_to_adult_temp_sensitivity
+        # Parámetros del modelo de grados-día acumulados (GDD) para desarrollo inmaduro
+        # Basado en Tun-Lin et al. (1999) para Aedes aegypti [15]
+        self.immature_development_threshold = model.immature_development_threshold  # T_base_inmaduro (°C)
+        self.immature_thermal_constant = model.immature_thermal_constant  # K_inmaduro (°C·día)
+        
+        # Acumulador de grados-día para desarrollo inmaduro (huevo → adulto)
+        self.grados_acumulados = 0.0
         
         # Parámetros de transmisión (cacheados)
         self.mosquito_to_human_prob = model.mosquito_to_human_prob  # α
@@ -120,9 +123,6 @@ class MosquitoAgent(Agent):
         # Parámetros de reproducción (cacheados)
         self.rainfall_threshold = model.rainfall_threshold
         self.female_ratio = model.female_ratio
-        self.egg_maturation_base_days = model.egg_maturation_base_days
-        self.egg_maturation_temp_optimal = model.egg_maturation_temp_optimal
-        self.egg_maturation_temp_sensitivity = model.egg_maturation_temp_sensitivity
         
         # Parámetros de movimiento (cacheados)
         self.max_range = model.max_range
@@ -142,25 +142,39 @@ class MosquitoAgent(Agent):
     
     def procesar_desarrollo_huevo(self):
         """
-        Procesa el desarrollo del huevo hasta eclosión.
+        Procesa el desarrollo inmaduro usando el modelo de grados-día acumulados (GDD).
         
-        Fórmula de duración dependiente de temperatura:
-        μ = base_dias + |θ - temp_optima| * sensibilidad
+        Basado en Tun-Lin et al. (1999) para Aedes aegypti [15].
+        El desarrollo desde huevo hasta adulto se completa cuando se acumula
+        la constante térmica K_inmaduro = 181.2 ± 36.1 °C·día.
+        
+        Fórmula de grados-día diarios:
+        GD_dia = max(T_dia - T_base_inmaduro, 0)
         
         Donde:
-        - θ: temperatura actual (°C)
-        - base_dias: 8 días a temperatura óptima
-        - temp_optima: 25°C para Aedes aegypti
-        - sensibilidad: 1.0 día por cada grado de desviación
-        """
-        temperatura = self.model.temperatura_actual
-        duracion_dias = self.egg_to_adult_base_days + abs(temperatura - self.egg_to_adult_temp_optimal) * self.egg_to_adult_temp_sensitivity
+        - T_dia: temperatura media diaria (tavg en °C)
+        - T_base_inmaduro: umbral térmico mínimo = 8.3 ± 3.6 °C
+        - El desarrollo solo progresa cuando T_dia > T_base_inmaduro
         
-        # Incrementar días como huevo
+        Referencias:
+        [15] Tun-Lin et al. (1999) - Aedes aegypti development thresholds
+        [16] [17] Modelos entomológicos estándar de grados-día
+        """
+        # Obtener temperatura media diaria del modelo
+        temperatura = self.model.temperatura_actual  # T_dia (tavg)
+        
+        # Calcular contribución diaria de grados-día
+        # GD_dia = max(T_dia - T_base_inmaduro, 0)
+        grados_dia = max(temperatura - self.immature_development_threshold, 0.0)
+        
+        # Acumular grados-día
+        self.grados_acumulados += grados_dia
+        
+        # Incrementar contador de días (para métricas)
         self.dias_como_huevo += 1
         
-        # Verificar si debe eclosionar
-        if self.dias_como_huevo >= duracion_dias:
+        # Verificar si se alcanzó la constante térmica total
+        if self.grados_acumulados >= self.immature_thermal_constant:
             self.eclosionar()
     
     def eclosionar(self):
@@ -426,27 +440,6 @@ class MosquitoAgent(Agent):
         # Resetear estado reproductivo
         self.ha_picado_hoy = False
         self.dias_desde_ultima_puesta = 0  # Reiniciar cooldown
-    
-    def _calcular_dias_maduracion(self, temperatura: float) -> int:
-        """
-        Calcula días de maduración del huevo según temperatura.
-        
-        Fórmula desde configuración:
-        τ = base_dias + |θ - temp_optima| / sensibilidad
-        
-        Por defecto: τ = 3 + |θ - 21| / 5
-        
-        Parameters
-        ----------
-        temperatura : float
-            Temperatura en grados Celsius
-            
-        Returns
-        -------
-        int
-            Días necesarios para maduración
-        """
-        return int(self.egg_maturation_base_days + abs(temperatura - self.egg_maturation_temp_optimal) / self.egg_maturation_temp_sensitivity)
     
     def _buscar_sitio_cria(self) -> Optional[Tuple[int, int]]:
         """

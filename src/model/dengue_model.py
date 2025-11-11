@@ -313,14 +313,10 @@ class DengueModel(Model):
         self.mating_probability = breeding.get('mating_probability', 0.6)
         self.female_ratio = breeding.get('female_ratio', 0.5)
         
-        # Desarrollo dependiente de temperatura
-        self.egg_maturation_base_days = breeding.get('egg_maturation_base_days', 3)
-        self.egg_maturation_temp_optimal = breeding.get('egg_maturation_temp_optimal', 21.0)
-        self.egg_maturation_temp_sensitivity = breeding.get('egg_maturation_temp_sensitivity', 5.0)
-        
-        self.egg_to_adult_base_days = breeding.get('egg_to_adult_base_days', 8)
-        self.egg_to_adult_temp_optimal = breeding.get('egg_to_adult_temp_optimal', 25.0)
-        self.egg_to_adult_temp_sensitivity = breeding.get('egg_to_adult_temp_sensitivity', 1.0)
+        # Modelo de grados-día acumulados (GDD) para desarrollo inmaduro
+        # Basado en Tun-Lin et al. (1999) para Aedes aegypti
+        self.immature_development_threshold = breeding.get('immature_development_threshold', 8.3)  # T_base_inmaduro (°C)
+        self.immature_thermal_constant = breeding.get('immature_thermal_constant', 181.2)  # K_inmaduro (°C·día)
         
         self.rainfall_threshold = breeding.get('rainfall_threshold', 0.0)
         self.breeding_site_ratio = breeding.get('breeding_site_ratio', 0.2)
@@ -407,13 +403,9 @@ class DengueModel(Model):
         self.mating_probability = 0.6
         self.female_ratio = 0.5
         
-        self.egg_maturation_base_days = 3
-        self.egg_maturation_temp_optimal = 21.0
-        self.egg_maturation_temp_sensitivity = 5.0
-        
-        self.egg_to_adult_base_days = 8
-        self.egg_to_adult_temp_optimal = 25.0
-        self.egg_to_adult_temp_sensitivity = 1.0
+        # Modelo de grados-día acumulados (GDD) para desarrollo inmaduro
+        self.immature_development_threshold = 8.3  # T_base_inmaduro (°C)
+        self.immature_thermal_constant = 181.2  # K_inmaduro (°C·día)
         
         self.rainfall_threshold = 0.0
         self.breeding_site_ratio = 0.2
