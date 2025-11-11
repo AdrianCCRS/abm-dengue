@@ -560,7 +560,7 @@ class DengueModel(Model):
         #self._aplicar_control()
         
         # 4. Activar todos los agentes (actualiza estados, movimiento, interacciones)
-        print(f"\n🔄 Activando {len(self.agents)} agentes...", flush=True)
+        print(f"\n[STEP] Activando {len(self.agents)} agentes...", flush=True)
         import time
         start_time = time.time()
         
@@ -569,7 +569,7 @@ class DengueModel(Model):
         from src.agents.mosquito_agent import MosquitoAgent
         humanos = sum(1 for a in self.agents if isinstance(a, HumanAgent))
         mosquitos = sum(1 for a in self.agents if isinstance(a, MosquitoAgent))
-        print(f"   👥 Humanos: {humanos}, 🦟 Mosquitos: {mosquitos}", flush=True)
+        print(f"   Humanos: {humanos}, Mosquitos: {mosquitos}", flush=True)
         
         agentes_lista = list(self.agents)
         self.random.shuffle(agentes_lista)
@@ -581,7 +581,7 @@ class DengueModel(Model):
             agente.step()
         
         elapsed = time.time() - start_time
-        print(f"✅ Agentes activados en {elapsed:.2f}s", flush=True)
+        print(f"[OK] Agentes activados en {elapsed:.2f}s", flush=True)
         
         # 4. Recolectar datos
         self.datacollector.collect(self)

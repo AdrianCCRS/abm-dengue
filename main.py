@@ -163,17 +163,17 @@ def ejecutar_simulacion(
             susceptibles = modelo._contar_humanos_estado(EstadoSalud.SUSCEPTIBLE)
             
             # Imprimir en la misma línea (sobrescribir)
-            print(f"\r📅 Día {i+1:3d}/{steps}: "
-                  f"👥 S:{susceptibles:3d} E:{expuestos:2d} I:{infectados:2d} R:{recuperados:3d} "
-                  f"| 🦟 A:{mosquitos_adultos:3d} (I:{mosquitos_inf:2d}) H:{huevos:3d} "
-                  f"| 🌡️{modelo.temperatura_actual:4.1f}°C 🌧️{modelo.precipitacion_actual:4.1f}mm", 
+            print(f"\rDía {i+1:3d}/{steps}: "
+                  f"H S:{susceptibles:3d} E:{expuestos:2d} I:{infectados:2d} R:{recuperados:3d} "
+                  f"| M A:{mosquitos_adultos:3d} (I:{mosquitos_inf:2d}) H:{huevos:3d} "
+                  f"| T:{modelo.temperatura_actual:4.1f}°C P:{modelo.precipitacion_actual:4.1f}mm", 
                   end='', flush=True)
     
     if verbose:
         print()  # Nueva línea después del último día
         print("\n" + "="*70)
-        print("✅ Simulación completada!")
-        print(f"📊 Resumen final:")
+        print("Simulación completada!")
+        print(f"Resumen final:")
         print(f"   • Total infectados: {modelo._contar_humanos_estado(EstadoSalud.INFECTADO)}")
         print(f"   • Total recuperados: {modelo._contar_humanos_estado(EstadoSalud.RECUPERADO)}")
         print(f"   • Mosquitos adultos: {modelo._contar_mosquitos_adultos()}")
