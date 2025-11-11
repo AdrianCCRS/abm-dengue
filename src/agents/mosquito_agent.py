@@ -185,6 +185,15 @@ class MosquitoAgent(Agent):
         Transición de HUEVO a ADULTO.
         
         El mosquito emerge como adulto y se coloca en el sitio de cría.
+        
+        NOTA: Se asume que self.sitio_cria contiene coordenadas válidas dentro del grid.
+        Los sitios de cría provienen de fuentes validadas:
+        - self.model.sitios_cria (validados durante inicialización del grid)
+        - self.model.sitios_cria_temporales (creados por _actualizar_sitios_cria_temporales)
+        - self.random.randrange() en _inicializar_mosquitos (garantizado dentro de bounds)
+        
+        Si se modifican estas fuentes, asegurar que las coordenadas cumplan:
+        0 <= x < grid.width y 0 <= y < grid.height
         """
         self.etapa = EtapaVida.ADULTO
         self.dias_como_huevo = 0
