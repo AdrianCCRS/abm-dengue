@@ -23,6 +23,7 @@ from ..agents import (
 )
 from .celda import Celda, TipoCelda
 from ..utils.climate_data import ClimateDataLoader
+from .egg_manager import EggManager
 
 
 class DengueModel(Model):
@@ -198,10 +199,25 @@ class DengueModel(Model):
         # Contador de IDs único
         self._next_id = 0
         
+        # Gestor de huevos (optimización: huevos no son agentes)
+        self.egg_manager = EggManager(self)
+        
         # Crear agentes
         self._crear_humanos(num_humanos, self.infectados_iniciales)
         self._crear_mosquitos(num_mosquitos, self.mosquitos_infectados_iniciales)
-        self._crear_huevos(num_huevos)
+        
+        # Crear huevos iniciales usando EggManager
+        if num_huevos > 0 and self.sitios_cria:
+            # Distribuir huevos entre sitios de cría disponibles
+            huevos_por_sitio = num_huevos // len(self.sitios_cria)
+            huevos_restantes = num_huevos % len(self.sitios_cria)
+            
+            for i, sitio in enumerate(self.sitios_cria):
+                cantidad = huevos_por_sitio
+                if i < huevos_restantes:
+                    cantidad += 1
+                if cantidad > 0:
+                    self.egg_manager.add_eggs(sitio, cantidad)
         
         # DataCollector para métricas
         self.datacollector = DataCollector(
@@ -555,11 +571,14 @@ class DengueModel(Model):
         
         # 2. Actualizar sitios de cría temporales (charcos post-lluvia)
         self._actualizar_sitios_cria_temporales()
+        
+        # 3. Procesar desarrollo de huevos (eclosión)
+        self.egg_manager.step()
          
-        # 3. Aplicar estrategias de control
+        # 4. Aplicar estrategias de control
         #self._aplicar_control()
         
-        # 4. Activar todos los agentes (actualiza estados, movimiento, interacciones)
+        # 5. Activar todos los agentes (actualiza estados, movimiento, interacciones)
         print(f"\n[STEP] Activando {len(self.agents)} agentes...", flush=True)
         import time
         start_time = time.time()
@@ -692,16 +711,11 @@ class DengueModel(Model):
         """
         self.lsm_activo = True
         
-        # Obtener todos los huevos
-        huevos = [a for a in self.agents 
-                 if isinstance(a, MosquitoAgent) and a.etapa == EtapaVida.HUEVO]
-        
-        # Aplicar reducción: cobertura × efectividad
-        reduccion = self.lsm_coverage * self.lsm_effectiveness
-        for huevo in huevos:
-            if self.random.random() < reduccion:
-                huevo.remove()
-                self.agents.remove(huevo)
+        # Aplicar control usando EggManager
+        self.egg_manager.apply_lsm_control(
+            coverage=self.lsm_coverage,
+            effectiveness=self.lsm_effectiveness
+        )
     
     def _aplicar_itn_irs(self):
         """
@@ -1136,9 +1150,8 @@ class DengueModel(Model):
                   if isinstance(a, MosquitoAgent) and a.etapa == EtapaVida.ADULTO)
     
     def _contar_huevos(self) -> int:
-        """Cuenta total de huevos."""
-        return sum(1 for a in self.agents 
-                  if isinstance(a, MosquitoAgent) and a.etapa == EtapaVida.HUEVO)
+        """Cuenta total de huevos usando EggManager."""
+        return self.egg_manager.count_eggs()
     
     def __repr__(self) -> str:
         """Representación en cadena del modelo."""

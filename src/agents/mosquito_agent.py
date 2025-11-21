@@ -412,12 +412,10 @@ class MosquitoAgent(Agent):
         - Condiciones climáticas favorables (precipitación >= umbral)
         - Haber pasado el período de cooldown (ciclo gonotrófico ~3 días)
         
-        Resultado: eggs_per_female huevos (por defecto 100)
+        Resultado: eggs_per_female huevos (por defecto 50)
         Sexo de huevos: female_ratio determina proporción de hembras
         
-        Nota: Solo los huevos hembra se convertirán en adultos. Los huevos
-        macho son descartados (nunca eclosionan) ya que los machos no
-        aportan información al modelo epidemiológico.
+        OPTIMIZACIÓN: Usa EggManager en vez de crear agentes individuales.
         """
         # Verificar cooldown (ciclo gonotrófico: tiempo entre puestas)
         if self.dias_desde_ultima_puesta < self.dias_cooldown_reproduccion:
@@ -434,22 +432,13 @@ class MosquitoAgent(Agent):
         if not sitio:
             return
         
-        # Poner solo huevos hembra (optimización: los machos no aportan al modelo)
+        # Calcular número de huevos hembra (optimización: solo modelamos hembras)
         # female_ratio determina cuántos huevos son hembras
         num_huevos_hembra = int(self.eggs_per_female * self.female_ratio)
         
-        # Crear solo huevos hembra
-        for _ in range(num_huevos_hembra):
-            unique_id = self.model.next_id()
-            huevo = MosquitoAgent(
-                unique_id=unique_id,
-                model=self.model,
-                etapa=EtapaVida.HUEVO,
-                sitio_cria=sitio
-            )
-            
-            # No agregar al grid (huevos no ocupan espacio hasta eclosionar)
-            self.model.agents.add(huevo)
+        # OPTIMIZACIÓN: Usar EggManager en vez de crear agentes individuales
+        # Esto reduce drásticamente el overhead de memoria y CPU
+        self.model.egg_manager.add_eggs(sitio, num_huevos_hembra)
         
         # Resetear estado reproductivo
         self.ha_picado_hoy = False

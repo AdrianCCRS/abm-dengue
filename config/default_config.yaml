@@ -7,8 +7,8 @@ simulation:
   num_humanos: 3000
   num_mosquitos: 1500
   num_huevos: 50
-  infectados_iniciales: 5
-  mosquitos_infectados_iniciales: 2
+  infectados_iniciales: 9
+  mosquitos_infectados_iniciales: 6
   usar_lsm: false
   usar_itn_irs: false
   seed: null
@@ -71,7 +71,7 @@ mobility:
 
 
 mosquito_breeding:
-  eggs_per_female: 100
+  eggs_per_female: 50
   mating_probability: 0.6
   female_ratio: 0.52
   # Modelo de grados-día acumulados (GDD) para desarrollo inmaduro
