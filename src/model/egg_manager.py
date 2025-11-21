@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Gestor de huevos de mosquito para el modelo ABM del Dengue.
 

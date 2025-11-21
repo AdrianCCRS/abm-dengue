@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Agente Mosquito para el modelo ABM del Dengue.
 

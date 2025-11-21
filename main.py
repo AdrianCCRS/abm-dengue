@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Script principal para ejecutar la simulación ABM del Dengue.
 

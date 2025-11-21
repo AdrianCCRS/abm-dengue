@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Agente Humano para el modelo ABM del Dengue.
 

@@ -1,5 +1,25 @@
 # Registro de Cambios - ABM Dengue Bucaramanga
 
+## 2025-11-21 (18:07) - Fix: Encoding UTF-8
+
+### Problema
+Error al ejecutar en servidor remoto:
+```
+SyntaxError: Non-ASCII character '\xc3' in file main.py on line 3, but no encoding declared
+```
+
+### Solución
+Agregada declaración `# -*- coding: utf-8 -*-` al inicio de todos los archivos Python con caracteres no-ASCII (acentos en español).
+
+**Archivos modificados**:
+- `main.py`
+- `src/model/dengue_model.py`
+- `src/agents/mosquito_agent.py`
+- `src/agents/human_agent.py`
+- `src/model/egg_manager.py`
+
+---
+
 ## 2025-11-21 - Optimización EggManager
 
 ### Problema Identificado

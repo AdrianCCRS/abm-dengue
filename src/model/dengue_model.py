@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Modelo principal ABM del Dengue para Bucaramanga.
 
