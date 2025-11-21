@@ -18,7 +18,7 @@ human_disease:
   infectious_period: 6.0
 
 mosquito_disease:
-  mortality_rate: 0.05
+  mortality_rate: 0.08         # Mr = 0.08 por día - Vida media ~12 días (más realista para campo)
   sensory_range: 3
 
 transmission:
@@ -84,6 +84,10 @@ mosquito_breeding:
   # Ciclo gonotrófico (reproducción de hembras)
   gonotrophic_cycle_days: 3     # Días mínimos entre puestas (2-4 días según literatura)
                                  # Referencia: Scott et al. (1993), Maciel-de-Freitas et al. (2006)
+  
+  # Mortalidad de huevos
+  egg_mortality_rate: 0.03      # 3% mortalidad diaria (~70% supervivencia a 10 días)
+                                 # Causas: desecación, depredación, condiciones adversas
   
   # Sitios de cría temporales (charcos post-lluvia)
   temporary_sites:

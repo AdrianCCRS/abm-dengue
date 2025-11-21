@@ -347,6 +347,7 @@ class DengueModel(Model):
         self.eggs_per_female = breeding.get('eggs_per_female', 100)
         self.mating_probability = breeding.get('mating_probability', 0.6)
         self.female_ratio = breeding.get('female_ratio', 0.5)
+        self.egg_mortality_rate = breeding.get('egg_mortality_rate', 0.0)  # Mortalidad de huevos (default 0)
         
         # Modelo de grados-día acumulados (GDD) para desarrollo inmaduro
         # Basado en Tun-Lin et al. (1999) para Aedes aegypti
@@ -490,6 +491,7 @@ class DengueModel(Model):
         self.eggs_per_female = 100
         self.mating_probability = 0.6
         self.female_ratio = 0.5
+        self.egg_mortality_rate = 0.0  # Sin mortalidad por defecto
         
         # Modelo de grados-día acumulados (GDD) para desarrollo inmaduro
         self.immature_development_threshold = 8.3  # T_base_inmaduro (°C)
@@ -575,6 +577,10 @@ class DengueModel(Model):
         
         # 3. Procesar desarrollo de huevos (eclosión)
         self.egg_manager.step()
+        
+        # 3.1. Aplicar mortalidad de huevos (si está configurada)
+        if self.egg_mortality_rate > 0:
+            self.egg_manager.apply_mortality(self.egg_mortality_rate)
          
         # 4. Aplicar estrategias de control
         #self._aplicar_control()

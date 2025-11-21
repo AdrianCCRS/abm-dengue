@@ -1,0 +1,184 @@
+Inicialización de parámetros y justificación de estos 
+
+ 
+
+steps: 365 
+
+Es el número de pasos de la simulación, en este caso está en días y buscamos simular un año. 
+
+width y height: 150 
+
+El POT clasifica el suelo urbano de Bucaramanga en 3.328,02 ha (= 33,28 km²) (Cuadro de Clasificación del Suelo) [1]. Para que un grid de 150×150 represente ~33,3 km², cada celda debe equivaler a ≈ 38,5 m × 38,5 m. Con esta escala, el rango de vuelo del Aedes aegypti (típicamente <100–150 m) se traduce en 2–4 celdas, lo que preserva interacciones ‘vector–huésped’ realistas en parques, viviendas y equipamientos. Además, se mantiene una resolución fina (manzana/microzona) sin sobredimensionar el territorio. 
+
+num_humanos: 3000 
+
+El ASIS 2022 reporta 618.967 habitantes para Bucaramanga, de los cuales 608.947 (98,4%) residen en la cabecera urbana [2]. Con el área urbana del POT (33,28 km²), la densidad urbana real es ~18.300 hab/km². Si se simulan 3.000 agentes y se aplica un scale_factor = 200 (1 agente ≈ 200 personas), la población “real” modelada es ~600.000, y la densidad escalada queda en ~600.000 / 33,3 ≈ 18.000 hab/km², consistente con la ciudad. Es decir, se mantiene un tamaño de agente computacionalmente manejable y, gracias al mapeo de celdas (38,5 m), se reproduce la presión de densidad que condiciona el contacto humano–vector en áreas urbanas. 
+
+num_mosquitos: (0.51 hembras / habitante) (1500) 
+
+Para estimar la población inicial de mosquitos adultos se tomó como referencia el estudio de Gómez-Vargas et al. [4], realizado en dos municipios de Urabá (Antioquia, Colombia), donde se determinó una densidad media de Aedes aegypti de 0,51 hembras por habitante, a partir de encuestas entomológicas y estimaciones de densidad vectorial. Considerando que la población urbana de Bucaramanga en 2022 asciende a 608.947 habitantes según el ASIS municipal [2], esta relación implica del orden de 310.000 hembras adultas en un escenario de alta infestación. En el modelo ABM, donde 3.000 agentes humanos representan aproximadamente 600.000 habitantes (factor de escala de 200), esta proporción se reescala a ≈1.550 mosquitos hembra, por lo que se fijó el parámetro num_mosquitos = 1500 como valor inicial. De esta manera, el modelo conserva la relación hembras/habitante observada en contextos colombianos con clima cálido y transmisión activa de dengue [4], coherente con la escala demográfica y espacial definida por el POT de Bucaramanga [1]. 
+
+num_huevos: 50 
+
+Para estimar el número inicial de huevos de Aedes aegypti en la simulación se tomó como referencia el estudio entomológico de Ruiz et al. (2018) en el área metropolitana de Bucaramanga, donde se recolectaron 25.254 huevos en ovitrampas, de los cuales el 36,8 % (≈9.300 huevos) correspondieron a Bucaramanga [3]. Considerando que el modelo representa el suelo urbano definido en el POT (≈33,28 km²), esta cifra equivale a una densidad aproximada de 279 huevos/km². Al aplicar el mismo factor de escala usado para la población humana (1 agente = 200 personas reales), se obtuvo un valor de ≈46 “huevos simulados”, que se redondeó a 50 huevos iniciales (num_huevos: 50). De este modo, el modelo mantiene el orden de magnitud de la presión reproductiva observada para A. aegypti en Bucaramanga, respetando la coherencia con la escala espacial y demográfica adoptada. 
+
+Infectados_inicales: 9 
+
+Para dimensionar los casos iniciales de dengue en el modelo se utilizaron los registros históricos del sistema de vigilancia SIVIGILA para el municipio de Bucaramanga, disponibles en el portal de datos abiertos de Colombia [5]. Entre 2015 y 2022 se observan años de alta transmisión, como 2015 (2695 casos) y 2019 (2856 casos), que corresponden a una incidencia anual del orden de 400–500 casos por 100.000 habitantes al considerar una población urbana cercana a 600.000 personas. Dado que estos valores representan acumulados anuales y no prevalencia puntual, en el modelo se definió un escenario de “brote temprano” donde aproximadamente el 0,3 % de la población real se encuentra en fase infecciosa al inicio. Aplicando el factor de escala (1 agente = 200 habitantes), esto equivale a infectados_iniciales = 9 agentes humanos. Este valor permite capturar un contexto epidemiológico coherente con los años de mayor transmisión, sin sobreestimar el número de casos activos en el día inicial de la simulación. 
+
+Mosquitos_infectados_iniciales: 6 
+La población vecinal de mosquitos se fijó en num_mosquitos = 1500 hembras adultas, estimada a partir de una densidad de 0,51 hembras por habitante reportada en municipios de Antioquia con clima similar [4], reescalada a la población de Bucaramanga. Diversos estudios en América Latina han documentado tasas de infección por virus dengue en Aedes aegypti de 1–4 % durante periodos epidémicos [6], [7]. Para representar un estado inicial compatible con un brote en crecimiento, pero aún lejos del pico epidémico, se asumió que ~0,4 % de los mosquitos están infectados al inicio del modelo, lo que conduce a mosquitos_infectados_iniciales = 6. Este valor mantiene la coherencia con el nivel de transmisión observado en los datos de SIVIGILA [5] y con los parámetros demográficos y vectoriales previamente definidos. 
+
+ 
+
+HUMAN DISEASE -> Incubation_period: 5.0 e infectious_period: 6.0: 
+
+El período de incubación intrínseco del dengue en humanos, definido como el intervalo entre la picadura infectante y la aparición de síntomas, se ha descrito típicamente entre 4 y 10 días, con un rango ampliado de 3 a 14 días según lineamientos de la OMS y del Instituto Nacional de Salud de Colombia [8], [9]. Estudios de historia natural del virus muestran que este período se ajusta bien a una distribución log-normal con una media cercana a 5,7–6 días [10]. Por su parte, la fase virémica sintomática, durante la cual el huésped humano puede transmitir el virus a mosquitos Aedes aegypti, suele durar entre 4 y 7 días, coincidiendo con la fase febril aguda descrita por OPS/OMS y guías clínicas regionales [8], [9]. En este modelo se fijan los parámetros incubation_period = 5 días y infectious_period = 6 días como valores promedio representativos, coherentes con dichos rangos. Opcionalmente, para introducir heterogeneidad individual sin añadir complejidad excesiva, estos valores se pueden muestrear de forma aleatoria entera en el rango 4–7 días (distribución uniforme discreta), manteniendo la media dentro de los intervalos clínicamente aceptados. 
+ 
+
+MOSQUITO DISEASE 
+
+mortality_rate: 0.05 
+La longevidad de Aedes aegypti está fuertemente influenciada por las condiciones ambientales tropicales. Estudios realizados en Colombia reportan vidas medias de 15–25 días para hembras adultas, equivalentes a una mortalidad diaria entre 4 % y 10 % [11]. Modelos entomológicos internacionales y nacionales, incluyendo el de Jindal y Rao  [12], utilizan tasas en ese rango para reproducir ciclos vectoriales realistas. En consecuencia, se adoptó mortality_rate = 0.05, lo que representa una probabilidad diaria de muerte del 5 % y una esperanza de vida promedio de 20 días, coherente con observaciones locales. 
+
+sensorial_range: 3 (trainable) 
+Es el valor óptimo obtenido por Jindal y Rao [12]; sin embargo, deberemos variarlo y ajustarlo nosotros a nuestro modelo. 
+
+Parámetros de transmisión (mosquito_to_human_prob, human_to_mosquito_prob) 
+En el modelo ABM de transmisión del dengue, los parámetros de probabilidad de infección representan la eficiencia con la que el virus se propaga entre mosquitos y humanos durante los eventos de picadura. La probabilidad de infección de un humano susceptible por un mosquito infectado (α) y la probabilidad de infección de un mosquito susceptible al picar a un humano infectado (β) se establecieron con base en el trabajo de Jindal y Rao [12], quienes calibraron un modelo similar para enfermedades transmitidas por Aedes aegypti, obteniendo valores de α = 0,6 y β = 0,275. Estos parámetros, aunque no provienen de mediciones experimentales directas, se encuentran dentro del rango observado en estudios entomológicos y virológicos sobre la transmisión del dengue en poblaciones de mosquitos y humanos en Colombia y América Latina [6], [7]. 
+
+La elección de estos valores refleja un escenario de transmisión activa en zonas urbanas tropicales con alta densidad vectorial, como Bucaramanga, donde la eficiencia vector→humano es relativamente alta y la transmisión humano→mosquito es moderada. En consecuencia, el modelo adopta los valores mosquito_to_human_prob = 0,6 y human_to_mosquito_prob = 0,275 como configuración base. Estos parámetros se consideran calibrables para análisis de sensibilidad, pero se mantienen fijos durante la simulación principal, evitando introducir variabilidad aleatoria por evento de picadura y garantizando reproducibilidad en los resultados. 
+
+Patrones de visita a parques según tipo de agente (park_probability_*) 
+Bucaramanga es reconocida por su alta dotación de parques urbanos distribuidos en prácticamente todas las comunas, lo que le ha valido el nombre de “Ciudad de los Parques” [1]. No obstante, la Encuesta de Movilidad y los análisis de contexto urbano muestran que la mayoría de los desplazamientos diarios corresponden a motivos de trabajo y estudio, mientras que los viajes de ocio representan una fracción minoritaria, aunque relevante, especialmente en población joven [2]. En el modelo se define una probabilidad diaria de visita a parques diferenciada por tipo de agente: park_probability_student = 0,3 para estudiantes, reflejando su mayor uso recreativo; park_probability_worker = 0,1 para trabajadores formales, cuyo patrón de movilidad está dominado por el trayecto hogar–trabajo; park_probability_mobile = 0,25 para agentes móviles (informales, mensajeros, trabajadores en calle), que con frecuencia transitan, esperan o trabajan en parques y plazas; y park_probability_stationary = 0,05 para agentes estacionarios (hogar, adultos mayores), con salidas ocasionales a zonas verdes. Estas probabilidades producen que aproximadamente un 18 % de la población simulada visite o atraviese un parque en un día típico, valor coherente con una ciudad densamente urbanizada pero con amplia oferta de espacios públicos y recreativos [1], [2]. 
+
+Horarios de escuela, trabajo y uso de parques (school_*, work_*, park_*, mobile_*) 
+Los horarios diarios de los agentes se definieron a partir de patrones típicos de jornada en el contexto colombiano y, en particular, en Bucaramanga. En el caso de los estudiantes, la mayoría de las instituciones educativas públicas funcionan en dos jornadas (mañana y tarde), usualmente 6:00–12:00 y 12:00–18:00. Para evitar modelar ambas de forma explícita, se adoptó un horario agregado school_start_hour = 6 y school_end_hour = 14, que cubre completamente la jornada de la mañana y parte de la tarde, manteniendo a los estudiantes fuera del hogar durante la franja de mayor actividad vectorial. Para los trabajadores se definió work_start_hour = 7 y work_end_hour = 18, lo que refleja una jornada continua aproximada entre 7:00 y 18:00, consistente con prácticas laborales habituales en entornos urbanos como Bucaramanga [1], [2]. 
+
+El uso de parques se modela principalmente en la franja vespertina, cuando las temperaturas descienden y se incrementan las actividades recreativas al aire libre. Se fijó park_start_hour = 16 y park_end_hour = 20, intervalo en el cual se concentra la visita a parques para estudiantes, trabajadores y agentes móviles, coherente con la alta disponibilidad de parques urbanos en la ciudad y con patrones de movilidad recreativa descritos en el contexto urbano local [1], [2]. Para los agentes móviles, cuyas actividades se desarrollan mayoritariamente en la calle (reparto, ventas informales, múltiples diligencias), se estableció una ventana de actividad ampliada mobile_active_start_hour = 6 y mobile_active_end_hour = 20, con cambios de ubicación cada dos horas (mobile_move_interval_hours = 2). De este modo, su presencia en el espacio público coincide temporalmente con los periodos de mayor circulación de personas y de actividad del vector Aedes aegypti, favoreciendo la interacción espacial relevante para la transmisión del dengue. 
+
+Parámetros de reproducción y desarrollo del mosquito (mosquito_breeding) 
+Los parámetros biológicos del vector Aedes aegypti se definieron a partir de observaciones experimentales locales y de literatura entomológica para climas tropicales. Ruiz et al. (2018) reportaron para el área metropolitana de Bucaramanga lotes de 60–120 huevos por oviposición y entre 3 y 5 ciclos gonotróficos por hembra [3], por lo que se fijó eggs_per_female = 100. La probabilidad de apareamiento se mantuvo en mating_probability = 0,6, siguiendo el valor calibrado en Jindal & Rao (2017) [12], representativo de poblaciones urbanas con densidad media de mosquitos. Se adoptó una proporción de sexos levemente sesgada hacia hembras (female_ratio = 0,52), acorde con observaciones de campo en zonas cálidas. 
+
+El tiempo de maduración de huevos dentro de la hembra y el desarrollo acuático de huevo → adulto se modelaron como funciones dependientes de la temperatura, con valores óptimos en torno a 26 °C, coherentes con el promedio térmico anual de Bucaramanga [2]. Así, se fijaron egg_maturation_base_days = 3, egg_maturation_temp_optimal = 26, egg_to_adult_base_days = 8 y egg_to_adult_temp_optimal = 26. Finalmente, el umbral de lluvia para la formación de criaderos se estableció en rainfall_threshold = 2 mm/día, y la fracción de celdas con potencial de criadero en breeding_site_ratio = 0,15, valores ajustados al contexto urbano local, donde la alta densidad de recipientes domésticos se combina con una cobertura significativa de suelo impermeabilizado [1], [2], [3], [12]. 
+
+Distribución de la población según patrón de movilidad (mobility_distribution) 
+La composición de la población simulada se basó en la estructura demográfica y ocupacional de Bucaramanga descrita en el ASIS 2022 [2] y en el análisis de contexto urbano elaborado a partir de datos del DANE y del POT municipal [1]. En 2022 la ciudad contaba con aproximadamente 608.947 habitantes, de los cuales un 33,8 % tenía menos de 25 años, un 53,7 % pertenecía al grupo de 25–59 años y un 12,5 % era mayor de 60 años. Asimismo, la tasa global de participación laboral se situó en torno al 61 %, con una marcada dualidad entre empleo formal e informal. 
+
+Con base en estos datos, la población del modelo se distribuyó en cuatro categorías de movilidad: estudiantes (0,25), que representan la población escolar y universitaria con desplazamientos regulares hogar–centro educativo; trabajadores (0,40), que incluyen empleados formales con rutinas diarias hogar–trabajo, en concordancia con la tasa de ocupación y participación laboral reportada por el Observatorio Laboral de Santander para el área metropolitana de Bucaramanga [13]; móviles (0,20), que agrupan a trabajadores informales, mensajeros y vendedores con trayectorias variables en el espacio urbano y una elevada informalidad estimada en cerca del 47 % de la población ocupada [13]; y estacionarios (0,15), que representan adultos mayores, personas dedicadas al hogar o con movilidad reducida. Esta configuración refleja la estructura demográfica de Bucaramanga y su alta proporción de población en edad laboral, manteniendo consistencia con las tasas de informalidad y movilidad urbana descritas por el DANE y el ASIS local [1], [2]. 
+
+Estructura ambiental y clima sintético (environment) 
+El entorno simulado reproduce la configuración urbana y climática de Bucaramanga a partir de la información del POT 2014–2027 [1] y del ASIS 2022 [2]. El suelo urbano consolidado (33,28 km²) incluye aproximadamente un 10 % de áreas verdes y parques y un 5 % de zonas hídricas o de drenaje, proporciones que se reflejan en los parámetros park_ratio = 0,10 y water_ratio = 0,05. Los tamaños de las zonas (2–4 celdas de agua y 3–6 de parque) representan adecuadamente quebradas menores y parques barriales en una cuadrícula donde cada celda equivale a 38,5 m. 
+
+El rango máximo de desplazamiento de los mosquitos se fijó en max_range = 5 (≈190 m diarios), en concordancia con estudios de dispersión de Aedes aegypti que reportan movimientos típicos de 50–150 m por día en entornos urbanos densos. Finalmente, el clima sintético se configuró con rain_probability = 0,35, rain_min_mm = 5 y rain_max_mm = 50, valores que reproducen el régimen pluviométrico bimodal de Bucaramanga (≈1.200 mm/año y ~130 días lluviosos), permitiendo que las lluvias activen dinámicamente la formación de criaderos temporales en el modelo. 
+
+Estructura ambiental y clima sintético (environment) 
+El entorno simulado reproduce la configuración urbana y climática de Bucaramanga a partir de la información del POT 2014–2027 [1] y del ASIS 2022 [2]. El suelo urbano consolidado (33,28 km²) incluye aproximadamente un 10 % de áreas verdes y parques y un 5 % de zonas hídricas o de drenaje, proporciones que se reflejan en los parámetros park_ratio = 0,10 y water_ratio = 0,05. Los tamaños de las zonas (2–4 celdas de agua y 3–6 de parque) representan adecuadamente quebradas menores y parques barriales en una cuadrícula donde cada celda equivale a 38,5 m. 
+
+El rango máximo de desplazamiento de los mosquitos se fijó en max_range = 5 (≈190 m diarios), en concordancia con estudios de dispersión de Aedes aegypti que reportan movimientos típicos de 50–150 m por día en entornos urbanos densos. Finalmente, el clima sintético se configuró con rain_probability = 0,35, rain_min_mm = 5 y rain_max_mm = 50, valores que reproducen el régimen pluviométrico bimodal de Bucaramanga (≈1.200 mm/año y ~130 días lluviosos), permitiendo que las lluvias activen dinámicamente la formación de criaderos temporales en el modelo. 
+
+ 
+
+Función de crecimiento de los mosquitos de huevo a adulto 
+
+En este modelo, el desarrollo inmaduro completo de Aedes aegypti (desde la eclosión del primer estadio larval hasta la emergencia del adulto) se representa mediante un modelo de grados-día acumulados (GDD, por sus siglas en inglés), que asume que el crecimiento solo progresa cuando la temperatura ambiental supera un umbral mínimo de desarrollo. Los parámetros de la formulación son: (i) la temperatura base de desarrollo inmaduro, T_base_inmaduro; (ii) la constante térmica total, K_inmaduro, expresada en °C·día; y (iii) la temperatura media diaria, T_dia. Siguiendo la definición estándar de GDD utilizada en entomología y agroclimatología, la temperatura media diaria se calcula como 
+T_dia = (T_max_dia + T_min_dia) / 2, 
+y la contribución diaria de grados-día se obtiene como 
+GD_dia = max( T_dia − T_base_inmaduro , 0 ), 
+de modo que el desarrollo inmaduro se completa cuando la suma acumulada 
+GD = suma de GD_dia desde el día 1 hasta el día n 
+alcanza la constante térmica K_inmaduro [16], [17]. De acuerdo con los experimentos de Tun-Lin et al. [15], para Aedes aegypti en condiciones de laboratorio el umbral térmico mínimo y la constante térmica total del desarrollo inmaduro se estiman en t = 8,3 ± 3,6 °C y K = 181,2 ± 36,1 °C·día, respectivamente. En la implementación del modelo ABM, estos valores se adoptan directamente como T_base_inmaduro y K_inmaduro, agregando los estadios de huevo, larva y pupa en un único estado “inmaduro”, pero conservando el tiempo total de desarrollo descrito en modelos entomológicos previos para Aedes aegypti [14], [15]. 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+Referencias 
+
+[1] Alcaldía de Bucaramanga, “Revisión General del Plan de Ordenamiento Territorial (POT) 2014–2027,” Acuerdo 011 de 2014, Bucaramanga, Colombia, 2014. [En línea]. Disponible: https://www.bucaramanga.gov.co/wp-content/uploads/2021/08/POT-2014-2027.pdf 
+
+[2] Secretaría de Salud y Ambiente de Bucaramanga, “Análisis de Situación de Salud – ASIS Bucaramanga 2022,” Bucaramanga, Colombia, 2022. [En línea]. Disponible: https://www.bucaramanga.gov.co/wp-content/uploads/shared-files/ASIS-2022-Bucaramanga.pdf 
+
+[3] N. Ruiz, G. A. Rincón, H. J. Parra y J. E. Duque, “Dinámica de oviposición de Aedes (Stegomyia) aegypti (Diptera: Culicidae), estado gonadotrófico y coexistencia con otros culícidos en el área Metropolitana de Bucaramanga, Colombia,” Rev. Univ. Ind. Santander Salud, vol. 50, no. 4, pp. 308–319, 2018, doi: 10.18273/revsal.v50n4-2018004. [En línea]. Disponible: http://www.scielo.org.co/scielo.php?script=sci_arttext&pid=S0121-08072018000400308 
+
+[4] W. Gómez-Vargas, P. A. Ríos-Tapias, K. Marin-Velásquez, E. Giraldo-Gallo, Á. Segura-Cardona, and M. Arboleda, “Density of Aedes aegypti and dengue virus transmission risk in two municipalities of Northwestern Antioquia, Colombia,” PLoS ONE, vol. 19, no. 1, e0295317, 2024, doi: 10.1371/journal.pone.0295317. [En línea]. Disponible: https://pubmed.ncbi.nlm.nih.gov/38271346/ 
+
+[5] Ministerio de Salud y Protección Social – Instituto Nacional de Salud, “13. Dengue, Dengue grave y mortalidad por dengue, municipio de Bucaramanga,” Datos Abiertos Colombia, 2015–2025. [En línea]. Disponible: https://www.datos.gov.co/Salud-y-Protecci-n-Social/13-Dengue-Dengue-grave-y-mortalidad-por-dengue-mun/qzc7-jbg3 
+
+[6] V. H. Peña-García et al., “Infection rates by dengue virus in mosquitoes and humans and their role in dengue epidemics in two Colombian cities,” Am. J. Trop. Med. Hyg., vol. 94, no. 5, pp. 1066–1074, 2016. 
+
+[7] R. Pérez-Castro et al., “Detection of all four dengue serotypes in Aedes aegypti female mosquitoes from urban areas of Medellín, Colombia,” Mem. Inst. Oswaldo Cruz, vol. 111, no. 4, pp. 233–240, 2016. 
+
+[8] Organización Mundial de la Salud, “Dengue y dengue grave,” Nota descriptiva, 2024. [En línea]. Disponible: https://www.who.int/es/news-room/fact-sheets/detail/dengue-and-severe-dengue 
+
+[9] Instituto Nacional de Salud, “Protocolo de Vigilancia en Salud Pública: Dengue (código 210–220–580),” Bogotá, Colombia, 2017 (y actualización 2024). [En línea]. Disponible: https://www.ins.gov.co/buscador-eventos/Lineamientos/Pro_Dengue.pdf 
+
+[10] H. Nishiura and S. B. Halstead, “Natural history of dengue virus (DENV)-1 and DENV-4 infections: Reanalysis of classic studies,” J. Infect. Dis., vol. 195, no. 7, pp. 1007–1013, 2007. 
+
+[11] J. Arévalo-Cortés, L. López-López, and C. Rodríguez-Bocanegra, “Life tables and longevity of Aedes aegypti under laboratory conditions from different Colombian populations,” Insects, vol. 13, no. 6, p. 536, 2022. doi: 10.3390/insects13060536. 
+
+[12] A. Jindal and S. Rao, “Agent-Based Modeling and Simulation of Mosquito-Borne Disease Transmission,” Int. J. Simul. Model., vol. 16, no. 3, pp. 422–432, 2017. 
+
+[13] Observatorio Laboral de Santander, Informe del Mercado Laboral del Área Metropolitana de Bucaramanga 2022, Cámara de Comercio de Bucaramanga – Universidad Industrial de Santander, Bucaramanga, Colombia, 2022. [En línea]. Disponible: https://www.camaradirecta.com/informes-y-estudios/observatorio-laboral-de-santander 
+
+[14] R. Focks et al., “Dynamic life table model for Aedes aegypti (Diptera: Culicidae): analysis of the literature and model development,” J. Med. Entomol., vol. 30, no. 6, pp. 1003–1017, 1993. 
+
+[15] W. Tun-Lin, T. R. Burkot, and B. H. Kay, “Effects of temperature and larval diet on development rates and survival of the dengue vector Aedes aegypti in north Queensland, Australia,” Med. Vet. Entomol., vol. 14, no. 1, pp. 31–37, 2000.  
+
+[16] Iowa State University Extension and Outreach, “Growing Degree Days for Insect Pests,” Integrated Crop Management, Ames, IA, USA, 2023. [En línea]. Disponible: https://crops.extension.iastate.edu/encyclopedia/growing-degree-days-insect-pests 
+
+[17] The Ohio State University, “Growing Degree Days (GDD) Glossary,” Ohio Agricultural Research and Development Center, Columbus, OH, USA, 2023. [En línea]. Disponible: https://weather.cfaes.osu.edu/gdd/glossary.asp 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
