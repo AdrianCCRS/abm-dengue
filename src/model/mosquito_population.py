@@ -77,7 +77,8 @@ class MosquitoPopulationGrid:
         
         # Capacidad de carga por celda (evita crecimiento exponencial)
         # Basado en densidad realista de mosquitos por área
-        self.CARRYING_CAPACITY_PER_CELL = 1000  # Máximo mosquitos por celda
+        # Ajustado a 3000 para preservar población inicial (~1500 mosquitos)
+        self.CARRYING_CAPACITY_PER_CELL = 3000  # Máximo mosquitos por celda
     
     def add_mosquitos(self, pos: Tuple[int, int], count: int, state: MosquitoState = MosquitoState.SUSCEPTIBLE):
         """
