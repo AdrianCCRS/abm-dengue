@@ -295,7 +295,7 @@ class MosquitoPopulationGrid:
             Modelo principal
         """
         # Obtener humanos en esta celda
-        humanos = model.grid.get_cell_contents((x, y))
+        humanos = model.grid.get_cell_list_contents([(x, y)])
         if not humanos:
             return
         
@@ -307,19 +307,21 @@ class MosquitoPopulationGrid:
             return
         
         # Parámetros de transmisión
-        bite_prob = model.bite_probability
-        transmission_prob = model.transmission_probability
+        # Nota: No hay bite_probability en el modelo, la picadura es implícita
+        # en las probabilidades de transmisión
+        trans_prob_m_to_h = model.mosquito_to_human_prob  # α
+        trans_prob_h_to_m = model.human_to_mosquito_prob  # β
         
         # 1. Transmisión Mosquito → Humano
         if self.I_m[x, y] > 0:
-            self._mosquito_to_human_transmission(x, y, humanos, bite_prob, transmission_prob, model)
+            self._mosquito_to_human_transmission(x, y, humanos, trans_prob_m_to_h, model)
         
         # 2. Transmisión Humano → Mosquito
         if self.S_m[x, y] > 0:
-            self._human_to_mosquito_transmission(x, y, humanos, bite_prob, transmission_prob, model)
+            self._human_to_mosquito_transmission(x, y, humanos, trans_prob_h_to_m, model)
     
     def _mosquito_to_human_transmission(self, x: int, y: int, humanos: List, 
-                                       bite_prob: float, trans_prob: float, model: 'DengueModel'):
+                                       trans_prob: float, model: 'DengueModel'):
         """
         Transmisión de mosquitos infecciosos a humanos susceptibles.
         
@@ -329,15 +331,14 @@ class MosquitoPopulationGrid:
             Coordenadas de la celda
         humanos : List
             Lista de agentes humanos en la celda
-        bite_prob : float
-            Probabilidad de picar
         trans_prob : float
-            Probabilidad de transmisión dado picadura
+            Probabilidad de transmisión mosquito→humano (α)
         model : DengueModel
             Modelo principal
         """
         # Mosquitos infecciosos que pican
-        infectious_bites = np.random.binomial(int(self.I_m[x, y]), bite_prob)
+        # Simplificación: cada mosquito infeccioso tiene probabilidad trans_prob de transmitir
+        infectious_bites = np.random.binomial(int(self.I_m[x, y]), trans_prob)
         
         if infectious_bites == 0:
             return
@@ -364,7 +365,7 @@ class MosquitoPopulationGrid:
                 susceptible_humans.remove(human)
     
     def _human_to_mosquito_transmission(self, x: int, y: int, humanos: List,
-                                       bite_prob: float, trans_prob: float, model: 'DengueModel'):
+                                       trans_prob: float, model: 'DengueModel'):
         """
         Transmisión de humanos infecciosos a mosquitos susceptibles.
         
@@ -374,15 +375,15 @@ class MosquitoPopulationGrid:
             Coordenadas de la celda
         humanos : List
             Lista de agentes humanos en la celda
-        bite_prob : float
-            Probabilidad de picar
         trans_prob : float
-            Probabilidad de transmisión dado picadura
+            Probabilidad de transmisión humano→mosquito (β)
         model : DengueModel
             Modelo principal
         """
         # Mosquitos susceptibles que pican
-        susceptible_bites = np.random.binomial(int(self.S_m[x, y]), bite_prob)
+        # Simplificación: cada mosquito susceptible tiene probabilidad de infectarse
+        # proporcional a la fracción de humanos infecciosos
+        susceptible_bites = np.random.binomial(int(self.S_m[x, y]), trans_prob)
         
         if susceptible_bites == 0:
             return
@@ -395,7 +396,7 @@ class MosquitoPopulationGrid:
         
         p_infectious = infectious_humans / len(humanos)
         
-        # Mosquitos que pican humanos infecciosos y se infectan
+        # Mosquitos que se infectan
         new_exposed = np.random.binomial(int(susceptible_bites), p_infectious * trans_prob)
         
         if new_exposed > 0:
@@ -423,7 +424,6 @@ class MosquitoPopulationGrid:
         
         # Parámetros de reproducción
         female_ratio = model.female_ratio
-        bite_prob = model.bite_probability
         eggs_per_female = model.eggs_per_female
         
         # Hembras en la celda
@@ -432,14 +432,15 @@ class MosquitoPopulationGrid:
         if females == 0:
             return
         
-        # Hembras que pican (necesario para reproducción)
-        biting_females = np.random.binomial(int(females), bite_prob)
+        # Hembras que se reproducen (simplificación: todas las hembras ponen huevos)
+        # En el modelo original, solo las que pican, pero aquí simplificamos
+        reproducing_females = females
         
-        if biting_females == 0:
+        if reproducing_females == 0:
             return
         
         # Huevos puestos (agregar a EggManager)
-        eggs = biting_females * eggs_per_female
+        eggs = reproducing_females * eggs_per_female
         
         if eggs > 0:
             # Agregar huevos al sitio de cría más cercano
