@@ -143,7 +143,7 @@ def run_simulation(config_path, steps=365, seed=None):
         str(BASE_DIR / "main.py"),
         "--config", str(config_path),
         "--steps", str(steps),
-        "--no-graphics"  # Sin gráficas individuales
+        "--no-plots"  # Sin gráficas individuales
     ]
     
     if seed is not None:
