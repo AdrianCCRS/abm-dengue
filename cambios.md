@@ -1,5 +1,66 @@
 # Registro de Cambios - ABM Dengue Bucaramanga
 
+## 2025-11-21 (22:20) - Optimización: Control Poblacional Agresivo (Basado en Profiling)
+
+### Problema Identificado (Profiling de 30 pasos)
+Explosión poblacional observada en debugging:
+- Paso 19: 2,253 → 7,929 mosquitos (3.5× en un día) - tiempo: 0.5s → 28.8s
+- Paso 30: 20,329 mosquitos - tiempo: 66.6s
+- Cuello de botella: 83.7% del tiempo en `mosquito_step_total`
+- **Conclusión**: El problema no es la eficiencia del código, sino el número de mosquitos
+
+### Solución Implementada
+
+#### 1. Ajustes Agresivos de Parámetros
+
+| Parámetro | Antes | Ahora | Cambio Total |
+|-----------|-------|-------|--------------|
+| `eggs_per_female` | 35 | **25** | -50% vs original (50) |
+| `gonotrophic_cycle_days` | 4 | **6** | -50% frecuencia vs original (3) |
+| `egg_mortality_rate` | 5% | **10%** | 35% supervivencia a 10 días |
+| `mortality_rate` (adultos) | 8% | **12%** | Vida media 8 días (vs 20 original) |
+
+#### 2. Capacidad de Carga por Sitio
+
+**Archivo**: `src/model/egg_manager.py:86-133`
+
+Implementado límite de **500 huevos por sitio de cría**:
+
+```python
+MAX_EGGS_PER_SITE = 500
+huevos_actuales = self.get_eggs_by_site(sitio_cria)
+
+if huevos_actuales >= MAX_EGGS_PER_SITE:
+    return  # Sitio lleno, no agregar más
+```
+
+**Justificación biológica**: Competencia larvaria por recursos limitados (alimento, espacio, oxígeno).
+
+### Impacto Esperado
+
+**Reducción poblacional**:
+- Día 30: 20,329 → ~3,000-4,000 mosquitos (-80-85%)
+- Tiempo/día: 66s → ~8-12s (-80-85%)
+- 365 días: ~7.6h → ~1.0h
+
+**Combinación de efectos**:
+- Menos huevos por puesta: -50%
+- Puestas menos frecuentes: -50%
+- Mortalidad huevos: 10% diario
+- Mortalidad adultos: 12% diario
+- Límite por sitio: 500 huevos máximo
+
+**Impacto combinado**: ~85-90% menos mosquitos que configuración original
+
+### Próximos Pasos
+
+**Validación**:
+- Ejecutar `python debug_bottleneck.py --steps 30`
+- Verificar población < 5,000 mosquitos al día 30
+- Confirmar tiempo < 15s/día
+
+---
+
 ## 2025-11-21 (20:55) - Optimización: Fase 2 - Mejoras de Código
 
 ### Optimizaciones Implementadas
