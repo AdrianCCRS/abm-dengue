@@ -380,24 +380,18 @@ class MosquitoPopulationGrid:
         model : DengueModel
             Modelo principal
         """
-        # Mosquitos susceptibles que pican
-        # Simplificación: cada mosquito susceptible tiene probabilidad de infectarse
-        # proporcional a la fracción de humanos infecciosos
-        susceptible_bites = np.random.binomial(int(self.S_m[x, y]), trans_prob)
-        
-        if susceptible_bites == 0:
-            return
-        
-        # Proporción de humanos infecciosos en la celda
+        # Contar humanos infecciosos
         infectious_humans = sum(1 for h in humanos if h.es_infeccioso())
         
         if infectious_humans == 0:
             return
         
+        # Proporción de humanos infecciosos en la celda
         p_infectious = infectious_humans / len(humanos)
         
-        # Mosquitos que se infectan
-        new_exposed = np.random.binomial(int(susceptible_bites), p_infectious * trans_prob)
+        # Mosquitos susceptibles que se infectan
+        # Cada mosquito susceptible tiene probabilidad trans_prob * p_infectious de infectarse
+        new_exposed = np.random.binomial(int(self.S_m[x, y]), trans_prob * p_infectious)
         
         if new_exposed > 0:
             self.S_m[x, y] -= new_exposed
