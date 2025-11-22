@@ -120,7 +120,7 @@ def create_config_variant(base_config_path, variant_name, params):
     return variant_path
 
 
-def run_simulation(config_path, steps=365, seed=None):
+def run_simulation(config_path, steps=364, seed=None):
     """
     Ejecuta una simulación con la configuración especificada.
     
@@ -342,7 +342,7 @@ def main():
     
     for name, config_path in config_paths.items():
         print(f"\n--- Ejecutando configuración: {name} ---")
-        df = run_simulation(config_path, steps=365, seed=42)
+        df = run_simulation(config_path, steps=364, seed=42)
         
         if df is not None:
             simulations_data[name] = df
