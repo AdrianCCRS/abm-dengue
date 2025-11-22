@@ -1,5 +1,60 @@
 # Registro de Cambios - ABM Dengue Bucaramanga
 
+## 2025-11-21 (20:50) - Optimización: Fase 1 - Ajuste de Parámetros Poblacionales
+
+### Problema
+Crecimiento exponencial excesivo observado en simulaciones:
+- Día 25: 45,672 mosquitos (de 1,500 iniciales)
+- Día 25: 1,095,536 huevos
+- Tiempo por día: 75s al día 25
+
+### Solución - Fase 1: Ajustes de Parámetros
+
+Tres ajustes para controlar crecimiento poblacional:
+
+#### 1. Reducción de Huevos por Hembra
+**Archivo**: `config/default_config.yaml:74`
+```yaml
+eggs_per_female: 35  # Reducido de 50 a 35 (-30%)
+```
+
+#### 2. Aumento de Ciclo Gonotrófico
+**Archivo**: `config/default_config.yaml:86`
+```yaml
+gonotrophic_cycle_days: 4  # Aumentado de 3 a 4 días (-25% frecuencia)
+```
+
+#### 3. Aumento de Mortalidad de Huevos
+**Archivo**: `config/default_config.yaml:90`
+```yaml
+egg_mortality_rate: 0.05  # Aumentado de 3% a 5% diario
+```
+
+### Impacto Esperado
+
+**Reducción en crecimiento poblacional**:
+- Huevos por puesta: -30%
+- Frecuencia de puesta: -25%
+- Supervivencia de huevos (10 días): 70% → 60%
+- **Impacto combinado**: ~60-70% menos mosquitos
+
+**Mejora de rendimiento**:
+- Tiempo por día (día 25): 75s → ~15s (-80%)
+- Simulación 365 días: ~7.6 horas → ~1.5 horas (-80%)
+
+### Próximos Pasos
+
+**Validación**:
+- Ejecutar simulación de 30 días
+- Verificar población < 10,000 mosquitos
+- Confirmar tiempo < 20s/día
+
+**Fase 2** (si es necesario):
+- Optimizaciones de código (cache, índices espaciales)
+- Estimado: -30% adicional en tiempo
+
+---
+
 ## 2025-11-21 (18:07) - Fix: Encoding UTF-8
 
 ### Problema

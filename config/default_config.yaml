@@ -71,7 +71,7 @@ mobility:
 
 
 mosquito_breeding:
-  eggs_per_female: 50
+  eggs_per_female: 35          # Reducido de 50 a 35 (más realista, -30% huevos)
   mating_probability: 0.6
   female_ratio: 0.52
   # Modelo de grados-día acumulados (GDD) para desarrollo inmaduro
@@ -82,11 +82,11 @@ mosquito_breeding:
   breeding_site_ratio: 0.2
   
   # Ciclo gonotrófico (reproducción de hembras)
-  gonotrophic_cycle_days: 3     # Días mínimos entre puestas (2-4 días según literatura)
+  gonotrophic_cycle_days: 4     # Días mínimos entre puestas (aumentado de 3 a 4, -25% frecuencia)
                                  # Referencia: Scott et al. (1993), Maciel-de-Freitas et al. (2006)
   
   # Mortalidad de huevos
-  egg_mortality_rate: 0.03      # 3% mortalidad diaria (~70% supervivencia a 10 días)
+  egg_mortality_rate: 0.05      # 5% mortalidad diaria (aumentado de 3% a 5%, ~60% supervivencia a 10 días)
                                  # Causas: desecación, depredación, condiciones adversas
   
   # Sitios de cría temporales (charcos post-lluvia)
