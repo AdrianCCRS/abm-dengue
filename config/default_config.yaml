@@ -1,103 +1,72 @@
-# Configuración por defecto para el modelo ABM del Dengue
-
 simulation:
-  steps: 365
+  steps: 364
   width: 150
   height: 150
-  num_humanos: 3000
+  num_humanos: 7000
   num_mosquitos: 1500
   num_huevos: 50
-  infectados_iniciales: 9
-  mosquitos_infectados_iniciales: 6
+  infectados_iniciales: 20
+  mosquitos_infectados_iniciales: 12
   usar_lsm: false
   usar_itn_irs: false
-  seed: null
+  seed: null      # dejar aleatoria para explorar variabilidad
 
 human_disease:
-  incubation_period: 5.0
-  infectious_period: 9.0         # Aumentado de 6 a 9 días para mantener epidemia activa
+  incubation_period: 5.0        # igual
+  infectious_period: 8.0        # antes 9: brote aún fuerte, pero un poco menos prolongado
 
 mosquito_disease:
-  mortality_rate: 0.08         # Mr = 0.08 por día - Vida media ~12 días (balance entre realismo y epidemia sostenible)
-  sensory_range: 3
-  incubation_period: 10        # EIP = 10 días (período de incubación extrínseca)
-  carrying_capacity_per_cell: 3000  # Máximo mosquitos por celda (evita crecimiento exponencial)
+  mortality_rate: 0.08          # antes 0.05 → vida media más corta, controla explosión
+  sensory_range: 2              # antes 3 → contacto más local, menos “super-mixing”
+  incubation_period: 10         # igual (EIP ~10 días)
+  carrying_capacity_per_cell: 3000   # antes 10000 → más acorde con docstring del grid
 
 transmission:
-  mosquito_to_human_prob: 0.6     # α - Probabilidad de transmisión dado que picó
-  human_to_mosquito_prob: 0.275   # β - Probabilidad de transmisión dado que picó
-  bite_rate: 0.5                  # Aumentado de 0.33 a 0.5 (~1 comida cada 2 días)
+  mosquito_to_human_prob: 0.4   # antes 0.6
+  human_to_mosquito_prob: 0.25  # antes 0.375
+  bite_rate: 0.5                # antes 0.7 (~1 comida cada 2 días aprox.)
 
 mobility:
-  # Probabilidades diarias de ubicación por tipo de agente
-  # Cada fila debe sumar 1.0 (distribución de probabilidad)
-  #
-  # NOTA: Estos valores son estimaciones basadas en la conversión del modelo
-  # horario anterior (que asumía incorrectamente pasos horarios).
-  #
-  # Procedimiento de cálculo:
-  # 1. Estudiantes: 6-14h escuela (8h) → 8/24 = 33% → 35% destination
-  #                 16-20h parque (4h × 30% prob) → 10% park
-  #                 Resto → 55% home
-  # 2. Trabajadores: 7-18h oficina (11h) → 11/24 = 46% → 35% destination
-  #                  16-20h parque (4h × 10% prob) → 5% park
-  #                  Resto → 60% home
-  # 3. Móviles: Movimiento cada 2h entre 6-20h (14h activo) → 40% random
-  #             25% prob parque en horario activo → 20% park
-  #             Resto → 40% home
-  # 4. Estacionarios: Siempre en casa con 5% prob parque → 95% home, 5% park
-  #
-  # RECOMENDACIÓN: Ajustar con datos empíricos de movilidad urbana si disponibles
-  # (encuestas de movilidad, datos GPS, estudios etnográficos, etc.)
-  
   student_daily_probabilities:
-    home: 0.55      # En casa (mañana temprano, noche)
-    destination: 0.35  # En escuela (día)
-    park: 0.10      # En parque (tarde)
+    home: 0.55
+    destination: 0.35
+    park: 0.10
   
   worker_daily_probabilities:
-    home: 0.60      # En casa
-    destination: 0.35  # En oficina
-    park: 0.05      # En parque
+    home: 0.60
+    destination: 0.35
+    park: 0.05
   
   mobile_daily_probabilities:
-    home: 0.40      # En casa
-    destination: 0.0   # Sin destino fijo
-    park: 0.20      # En parque
-    random: 0.40    # Ubicación aleatoria
+    home: 0.45      # antes 0.40 → un pelín más caseros
+    destination: 0.0
+    park: 0.15      # antes 0.20
+    random: 0.40
   
   stationary_daily_probabilities:
-    home: 0.95      # Casi siempre en casa
+    home: 0.95
     destination: 0.0
-    park: 0.05      # Rara vez en parque
+    park: 0.05
     random: 0.0
 
-
 mosquito_breeding:
-  eggs_per_female: 40          # Balance entre reproducción y control (valor intermedio)
+  eggs_per_female: 25          # **IMPORTANTE**: el comentario decía 25, pero estaba en 50
   mating_probability: 0.6
   female_ratio: 0.52
-  # Modelo de grados-día acumulados (GDD) para desarrollo inmaduro
-  # Basado en Tun-Lin et al. (1999) para Aedes aegypti
-  immature_development_threshold: 8.3    # T_base_inmaduro (°C) - umbral térmico mínimo
-  immature_thermal_constant: 181.2       # K_inmaduro (°C·día) - constante térmica total
+  immature_development_threshold: 8.3
+  immature_thermal_constant: 181.2
   rainfall_threshold: 0.0
-  breeding_site_ratio: 0.2
-  
-  # Ciclo gonotrófico (reproducción de hembras)
-  gonotrophic_cycle_days: 4     # Días mínimos entre puestas (balance entre realismo y estabilidad)
-                                 # Referencia: Scott et al. (1993), Maciel-de-Freitas et al. (2006)
-  
-  # Mortalidad de huevos
-  egg_mortality_rate: 0.05      # 5% mortalidad diaria (balance entre supervivencia ~60% a 10 días y control)
-                                 # Causas: desecación, depredación, condiciones adversas
-  
-  # Sitios de cría temporales (charcos post-lluvia)
+  breeding_site_ratio: 0.10    # antes 0.20 → menos sitios “permanentes”
+
+  gonotrophic_cycle_days: 5    # antes 4 → hembras ponen huevos un poco menos frecuente
+
+  egg_mortality_rate: 0.35     # antes 0.25 → sobreviven menos huevos
+
   temporary_sites:
-    min_rainfall: 5.0           # mm mínimos para crear charcos
-    sites_per_mm: 0.5           # charcos creados por mm de lluvia (ej: 10mm → 5 charcos)
-    duration_days: 7            # días que persiste un charco sin lluvia
-    max_sites: 100              # límite máximo de charcos simultáneos
+    min_rainfall: 5.0
+    sites_per_mm: 0.30         # antes 0.5 → menos charcos por mm de lluvia
+    duration_days: 6           # antes 7 → charcos duran un poco menos
+    max_sites: 80              # antes 100
 
 population:
   mobility_distribution:
@@ -108,22 +77,18 @@ population:
 
 environment:
   cell_types:
-    water_ratio: 0.05      # 5 % de celdas tipo agua (quebradas, drenajes)
-    park_ratio: 0.10       # 10 % de celdas tipo parque o zonas verdes
+    water_ratio: 0.05
+    park_ratio: 0.10
   zone_sizes:
-    water_min: 2           # zonas de 2–4 celdas (~80–150 m)
+    water_min: 2
     water_max: 4
-    park_min: 3            # parques de 3–6 celdas (~0,4–0,9 ha)
+    park_min: 3
     park_max: 6
   mosquito_flight:
-    max_range: 5           # 5 celdas (~190 m de rango de vuelo diario)
+    max_range: 5
   grid_generation:
-    max_placement_failures: 50  # Límite de fallos consecutivos al colocar zonas
-    max_total_attempts: 500     # Límite total de intentos de colocación
-  synthetic_climate:
-    rain_probability: 0.35 # 35 % de días con lluvia (~128 días/año)
-    rain_min_mm: 5.0       # lluvias típicas ligeras a moderadas
-    rain_max_mm: 50.0      # picos en temporada húmeda
+    max_placement_failures: 50
+    max_total_attempts: 500
 
 control:
   lsm:
@@ -136,5 +101,5 @@ control:
     effectiveness: 0.7
 
 human_behavior:
-  isolation_probability: 0.7
+  isolation_probability: 0.3     # antes 0.7
   infected_mobility_radius: 1
