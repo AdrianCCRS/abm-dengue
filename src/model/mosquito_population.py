@@ -74,6 +74,10 @@ class MosquitoPopulationGrid:
         self.S_m = np.zeros((width, height), dtype=np.int32)
         self.E_m = np.zeros((width, height), dtype=np.int32)
         self.I_m = np.zeros((width, height), dtype=np.int32)
+        
+        # Capacidad de carga por celda (evita crecimiento exponencial)
+        # Basado en densidad realista de mosquitos por área
+        self.CARRYING_CAPACITY_PER_CELL = 1000  # Máximo mosquitos por celda
     
     def add_mosquitos(self, pos: Tuple[int, int], count: int, state: MosquitoState = MosquitoState.SUSCEPTIBLE):
         """
@@ -220,6 +224,9 @@ class MosquitoPopulationGrid:
         
         # 4. Reproducción
         self._process_reproduction(x, y, model)
+        
+        # 5. Aplicar capacidad de carga (evita crecimiento exponencial)
+        self._apply_carrying_capacity(x, y)
     
     def _apply_mortality(self, x: int, y: int, model: 'DengueModel'):
         """
@@ -236,17 +243,17 @@ class MosquitoPopulationGrid:
         """
         mortality_rate = model.mortality_rate
         
-        # Mortalidad por compartimento (binomial)
+        # Mortalidad por compartimento (binomial o aproximación normal)
         if self.S_m[x, y] > 0:
-            deaths_S = np.random.binomial(int(self.S_m[x, y]), mortality_rate)
+            deaths_S = self._safe_binomial(int(self.S_m[x, y]), mortality_rate)
             self.S_m[x, y] -= deaths_S
         
         if self.E_m[x, y] > 0:
-            deaths_E = np.random.binomial(int(self.E_m[x, y]), mortality_rate)
+            deaths_E = self._safe_binomial(int(self.E_m[x, y]), mortality_rate)
             self.E_m[x, y] -= deaths_E
         
         if self.I_m[x, y] > 0:
-            deaths_I = np.random.binomial(int(self.I_m[x, y]), mortality_rate)
+            deaths_I = self._safe_binomial(int(self.I_m[x, y]), mortality_rate)
             self.I_m[x, y] -= deaths_I
     
     def _apply_transitions(self, x: int, y: int, model: 'DengueModel'):
@@ -274,10 +281,49 @@ class MosquitoPopulationGrid:
         transition_rate = 1.0 / eip
         
         # Mosquitos que completan incubación
-        transitions = np.random.binomial(int(self.E_m[x, y]), transition_rate)
+        transitions = self._safe_binomial(int(self.E_m[x, y]), transition_rate)
         
         self.E_m[x, y] -= transitions
         self.I_m[x, y] += transitions
+    
+    def _safe_binomial(self, n: int, p: float) -> int:
+        """
+        Muestreo binomial seguro que maneja poblaciones grandes.
+        
+        Para n grande, usa aproximación normal en vez de binomial
+        para evitar overflow de numpy.
+        
+        Parameters
+        ----------
+        n : int
+            Número de ensayos
+        p : float
+            Probabilidad de éxito
+            
+        Returns
+        -------
+        int
+            Número de éxitos
+        """
+        if n <= 0:
+            return 0
+        
+        if p <= 0:
+            return 0
+        
+        if p >= 1:
+            return n
+        
+        # Para n muy grande, usar aproximación normal
+        # Binomial(n, p) ≈ Normal(μ=np, σ²=np(1-p))
+        if n > 1000000:  # 1 millón
+            mean = n * p
+            std = np.sqrt(n * p * (1 - p))
+            result = int(np.random.normal(mean, std))
+            # Asegurar que está en rango válido
+            return max(0, min(n, result))
+        else:
+            return np.random.binomial(n, p)
     
     def _process_biting_and_transmission(self, x: int, y: int, model: 'DengueModel'):
         """
@@ -441,7 +487,7 @@ class MosquitoPopulationGrid:
         # Hembras que se reproducen (ciclo gonotrófico)
         # Probabilidad diaria = 1 / gonotrophic_cycle_days
         reproduction_prob = 1.0 / gonotrophic_cycle
-        reproducing_females = np.random.binomial(int(females), reproduction_prob)
+        reproducing_females = self._safe_binomial(int(females), reproduction_prob)
         
         if reproducing_females == 0:
             return
@@ -453,6 +499,27 @@ class MosquitoPopulationGrid:
             # Agregar huevos al sitio de cría más cercano
             # (simplificación: usar la celda actual como sitio)
             model.egg_manager.add_eggs((x, y), eggs)
+    
+    def _apply_carrying_capacity(self, x: int, y: int):
+        """
+        Aplica capacidad de carga a una celda.
+        
+        Si la población excede la capacidad, reduce proporcionalmente
+        todos los compartimentos.
+        
+        Parameters
+        ----------
+        x, y : int
+            Coordenadas de la celda
+        """
+        total = self.S_m[x, y] + self.E_m[x, y] + self.I_m[x, y]
+        
+        if total > self.CARRYING_CAPACITY_PER_CELL:
+            # Reducir proporcionalmente
+            factor = self.CARRYING_CAPACITY_PER_CELL / total
+            self.S_m[x, y] = int(self.S_m[x, y] * factor)
+            self.E_m[x, y] = int(self.E_m[x, y] * factor)
+            self.I_m[x, y] = int(self.I_m[x, y] * factor)
     
     def __repr__(self) -> str:
         """Representación en cadena del grid"""
