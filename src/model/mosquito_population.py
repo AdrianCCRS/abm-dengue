@@ -336,7 +336,7 @@ class MosquitoPopulationGrid:
         model : DengueModel
             Modelo principal
         """
-        # Mosquitos infecciosos que pican
+        # Mosquitos infecciosos que transmiten
         # Simplificación: cada mosquito infeccioso tiene probabilidad trans_prob de transmitir
         infectious_bites = np.random.binomial(int(self.I_m[x, y]), trans_prob)
         
@@ -355,14 +355,11 @@ class MosquitoPopulationGrid:
             if not susceptible_humans:
                 break
             
-            # Seleccionar humano al azar
+            # Seleccionar humano al azar y transmitir
             human = model.random.choice(susceptible_humans)
-            
-            # Transmisión con probabilidad trans_prob
-            if model.random.random() < trans_prob:
-                human.get_exposed()
-                # Remover de susceptibles (ya no puede ser infectado de nuevo)
-                susceptible_humans.remove(human)
+            human.get_exposed()
+            # Remover de susceptibles (ya no puede ser infectado de nuevo)
+            susceptible_humans.remove(human)
     
     def _human_to_mosquito_transmission(self, x: int, y: int, humanos: List,
                                        trans_prob: float, model: 'DengueModel'):
@@ -419,6 +416,7 @@ class MosquitoPopulationGrid:
         # Parámetros de reproducción
         female_ratio = model.female_ratio
         eggs_per_female = model.eggs_per_female
+        gonotrophic_cycle = model.gonotrophic_cycle_days
         
         # Hembras en la celda
         females = int(total_mosquitos * female_ratio)
@@ -426,9 +424,10 @@ class MosquitoPopulationGrid:
         if females == 0:
             return
         
-        # Hembras que se reproducen (simplificación: todas las hembras ponen huevos)
-        # En el modelo original, solo las que pican, pero aquí simplificamos
-        reproducing_females = females
+        # Hembras que se reproducen (ciclo gonotrófico)
+        # Probabilidad diaria = 1 / gonotrophic_cycle_days
+        reproduction_prob = 1.0 / gonotrophic_cycle
+        reproducing_females = np.random.binomial(int(females), reproduction_prob)
         
         if reproducing_females == 0:
             return
