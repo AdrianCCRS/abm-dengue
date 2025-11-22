@@ -211,6 +211,12 @@ class DengueModel(Model):
         self._crear_humanos(num_humanos, self.infectados_iniciales)
         self._crear_mosquitos(num_mosquitos, self.mosquitos_infectados_iniciales)
         
+        # Verificar que se crearon correctamente
+        mosquitos_creados = self.mosquito_pop.total_mosquitos()
+        print(f"[INIT] Mosquitos creados: {mosquitos_creados} (esperado: {num_mosquitos})", flush=True)
+        if mosquitos_creados != num_mosquitos:
+            print(f"[WARNING] Discrepancia en mosquitos iniciales!", flush=True)
+        
         # Crear huevos iniciales usando EggManager
         if num_huevos > 0 and self.sitios_cria:
             # Distribuir huevos entre sitios de cría disponibles
