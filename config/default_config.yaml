@@ -15,7 +15,7 @@ simulation:
 
 human_disease:
   incubation_period: 5.0
-  infectious_period: 6.0
+  infectious_period: 9.0         # Aumentado de 6 a 9 días para mantener epidemia activa
 
 mosquito_disease:
   mortality_rate: 0.08         # Mr = 0.08 por día - Vida media ~12 días (balance entre realismo y epidemia sostenible)
@@ -25,7 +25,7 @@ mosquito_disease:
 transmission:
   mosquito_to_human_prob: 0.6     # α - Probabilidad de transmisión dado que picó
   human_to_mosquito_prob: 0.275   # β - Probabilidad de transmisión dado que picó
-  bite_rate: 0.33                 # Probabilidad de picadura diaria (~1 comida cada 3 días)
+  bite_rate: 0.5                  # Aumentado de 0.33 a 0.5 (~1 comida cada 2 días)
 
 mobility:
   # Probabilidades diarias de ubicación por tipo de agente
@@ -88,7 +88,7 @@ mosquito_breeding:
                                  # Referencia: Scott et al. (1993), Maciel-de-Freitas et al. (2006)
   
   # Mortalidad de huevos
-  egg_mortality_rate: 0.10      # 10% mortalidad diaria (aumentado agresivamente, ~35% supervivencia a 10 días)
+  egg_mortality_rate: 0.25      # 10% mortalidad diaria (aumentado agresivamente, ~35% supervivencia a 10 días)
                                  # Causas: desecación, depredación, condiciones adversas
   
   # Sitios de cría temporales (charcos post-lluvia)
