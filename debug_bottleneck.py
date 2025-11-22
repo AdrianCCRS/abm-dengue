@@ -146,7 +146,8 @@ def run_debug(num_steps=3):
     print("DEBUGGING DE CUELLOS DE BOTELLA - ABM DENGUE")
     print("="*80)
     
-    config_path = Path(__file__).parent / 'config' / 'default_config.yaml'
+    root_dir = Path(__file__).parent
+    config_path = root_dir / 'config' / 'default_config.yaml'
     
     print(f"\nCargando configuración desde {config_path}...")
     
@@ -156,6 +157,10 @@ def run_debug(num_steps=3):
         config = yaml.safe_load(f)
     
     climate_data_path = config.get('climate_data_path', 'data/climate/bucaramanga_climate.csv')
+    
+    # Convertir a ruta absoluta si es relativa
+    if not Path(climate_data_path).is_absolute():
+        climate_data_path = str(root_dir / climate_data_path)
     
     print(f"Creando modelo con datos climáticos: {climate_data_path}...")
     model = DengueModel(
