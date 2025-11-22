@@ -104,18 +104,6 @@ class EggManager:
         if cantidad <= 0:
             return
         
-        # OPTIMIZACIÓN: Capacidad máxima por sitio (competencia larvaria)
-        MAX_EGGS_PER_SITE = 500
-        huevos_actuales = self.get_eggs_by_site(sitio_cria)
-        
-        # Si el sitio está lleno, no agregar más huevos
-        if huevos_actuales >= MAX_EGGS_PER_SITE:
-            return
-        
-        # Limitar cantidad a agregar según capacidad restante
-        capacidad_restante = MAX_EGGS_PER_SITE - huevos_actuales
-        cantidad = min(cantidad, capacidad_restante)
-        
         # Buscar lote existente en el mismo sitio y mismo día
         dia_actual = self.model.dia_simulacion
         for batch in self.egg_batches:
