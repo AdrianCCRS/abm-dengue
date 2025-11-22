@@ -238,15 +238,15 @@ class MosquitoPopulationGrid:
         
         # Mortalidad por compartimento (binomial)
         if self.S_m[x, y] > 0:
-            deaths_S = model.random.binomial(self.S_m[x, y], mortality_rate)
+            deaths_S = np.random.binomial(int(self.S_m[x, y]), mortality_rate)
             self.S_m[x, y] -= deaths_S
         
         if self.E_m[x, y] > 0:
-            deaths_E = model.random.binomial(self.E_m[x, y], mortality_rate)
+            deaths_E = np.random.binomial(int(self.E_m[x, y]), mortality_rate)
             self.E_m[x, y] -= deaths_E
         
         if self.I_m[x, y] > 0:
-            deaths_I = model.random.binomial(self.I_m[x, y], mortality_rate)
+            deaths_I = np.random.binomial(int(self.I_m[x, y]), mortality_rate)
             self.I_m[x, y] -= deaths_I
     
     def _apply_transitions(self, x: int, y: int, model: 'DengueModel'):
@@ -274,7 +274,7 @@ class MosquitoPopulationGrid:
         transition_rate = 1.0 / eip
         
         # Mosquitos que completan incubación
-        transitions = model.random.binomial(self.E_m[x, y], transition_rate)
+        transitions = np.random.binomial(int(self.E_m[x, y]), transition_rate)
         
         self.E_m[x, y] -= transitions
         self.I_m[x, y] += transitions
@@ -337,7 +337,7 @@ class MosquitoPopulationGrid:
             Modelo principal
         """
         # Mosquitos infecciosos que pican
-        infectious_bites = model.random.binomial(self.I_m[x, y], bite_prob)
+        infectious_bites = np.random.binomial(int(self.I_m[x, y]), bite_prob)
         
         if infectious_bites == 0:
             return
@@ -382,7 +382,7 @@ class MosquitoPopulationGrid:
             Modelo principal
         """
         # Mosquitos susceptibles que pican
-        susceptible_bites = model.random.binomial(self.S_m[x, y], bite_prob)
+        susceptible_bites = np.random.binomial(int(self.S_m[x, y]), bite_prob)
         
         if susceptible_bites == 0:
             return
@@ -396,7 +396,7 @@ class MosquitoPopulationGrid:
         p_infectious = infectious_humans / len(humanos)
         
         # Mosquitos que pican humanos infecciosos y se infectan
-        new_exposed = model.random.binomial(susceptible_bites, p_infectious * trans_prob)
+        new_exposed = np.random.binomial(int(susceptible_bites), p_infectious * trans_prob)
         
         if new_exposed > 0:
             self.S_m[x, y] -= new_exposed
@@ -433,7 +433,7 @@ class MosquitoPopulationGrid:
             return
         
         # Hembras que pican (necesario para reproducción)
-        biting_females = model.random.binomial(females, bite_prob)
+        biting_females = np.random.binomial(int(females), bite_prob)
         
         if biting_females == 0:
             return
