@@ -163,13 +163,15 @@ def run_debug(num_steps=3):
         climate_data_path = str(root_dir / climate_data_path)
     
     # Override fecha_inicio para que coincida con los datos disponibles (2022)
+    from datetime import datetime
+    
     print(f"Creando modelo con datos climáticos: {climate_data_path}...")
     print(f"Nota: Usando fecha_inicio=2022-01-01 para coincidir con datos disponibles")
     
     model = DengueModel(
         config_file=str(config_path),
         climate_data_path=climate_data_path,
-        fecha_inicio='2022-01-01'  # Override para usar datos de 2022
+        fecha_inicio=datetime(2022, 1, 1)  # Override para usar datos de 2022
     )
     
     # Crear debugger e instrumentar
