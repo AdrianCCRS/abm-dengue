@@ -323,6 +323,7 @@ class DengueModel(Model):
         transmission = config.get('transmission', {})
         self.mosquito_to_human_prob = transmission.get('mosquito_to_human_prob', 0.6)  # α
         self.human_to_mosquito_prob = transmission.get('human_to_mosquito_prob', 0.275)  # β
+        self.bite_rate = transmission.get('bite_rate', 0.33)  # Probabilidad de picadura diaria
         
         # Parámetros de movilidad humana (probabilidades diarias por tipo)
         mobility = config.get('mobility', {})

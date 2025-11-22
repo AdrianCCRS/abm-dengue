@@ -368,92 +368,126 @@ class MosquitoPopulationGrid:
             return
         
         # Parámetros de transmisión
-        # Nota: No hay bite_probability en el modelo, la picadura es implícita
-        # en las probabilidades de transmisión
-        trans_prob_m_to_h = model.mosquito_to_human_prob  # α
-        trans_prob_h_to_m = model.human_to_mosquito_prob  # β
+        alpha = model.mosquito_to_human_prob  # α
+        beta = model.human_to_mosquito_prob   # β
         
         # 1. Transmisión Mosquito → Humano
         if self.I_m[x, y] > 0:
-            self._mosquito_to_human_transmission(x, y, humanos, trans_prob_m_to_h, model)
+            self._mosquito_to_human_transmission(x, y, humanos, alpha, model)
         
         # 2. Transmisión Humano → Mosquito
         if self.S_m[x, y] > 0:
-            self._human_to_mosquito_transmission(x, y, humanos, trans_prob_h_to_m, model)
+            self._human_to_mosquito_transmission(x, y, humanos, beta, model)
     
     def _mosquito_to_human_transmission(self, x: int, y: int, humanos: List, 
-                                       trans_prob: float, model: 'DengueModel'):
+                                       alpha: float, model: 'DengueModel'):
         """
         Transmisión de mosquitos infecciosos a humanos susceptibles.
         
+        MODELO EXPLÍCITO DE PICADURA:
+        1. Mosquitos infecciosos pican con probabilidad bite_rate
+        2. Picaduras se distribuyen entre humanos (proporción susceptibles)
+        3. Transmisión ocurre con probabilidad α dado que picó
+        
         Parameters
         ----------
         x, y : int
             Coordenadas de la celda
         humanos : List
-            Lista de agentes humanos en la celda
-        trans_prob : float
-            Probabilidad de transmisión mosquito→humano (α)
+            Lista de agentes humanos en el vecindario
+        alpha : float
+            Probabilidad de transmisión mosquito→humano (α) dado que picó
         model : DengueModel
             Modelo principal
         """
-        # Mosquitos infecciosos que transmiten
-        # Simplificación: cada mosquito infeccioso tiene probabilidad trans_prob de transmitir
-        infectious_bites = np.random.binomial(int(self.I_m[x, y]), trans_prob)
-        
-        if infectious_bites == 0:
+        I = int(self.I_m[x, y])
+        if I <= 0:
             return
-        
-        # Humanos susceptibles en la celda
+
         susceptible_humans = [h for h in humanos if h.es_susceptible()]
-        
-        if not susceptible_humans:
+        H_s = len(susceptible_humans)
+        H_tot = len(humanos)
+
+        if H_s == 0 or H_tot == 0:
             return
-        
-        # Distribuir picaduras entre humanos susceptibles
-        # Cada humano tiene probabilidad proporcional de ser picado
-        for _ in range(infectious_bites):
-            if not susceptible_humans:
-                break
-            
-            # Seleccionar humano al azar y transmitir
-            human = model.random.choice(susceptible_humans)
+
+        # 1. Mosquitos infecciosos que pican hoy
+        bite_rate = getattr(model, "bite_rate", 0.33)
+        biting_I = self._safe_binomial(I, bite_rate)
+        if biting_I == 0:
+            return
+
+        # 2. Picaduras sobre humanos susceptibles (proporcional a H_s/H_tot)
+        p_susceptible = H_s / H_tot
+        bites_on_sus = self._safe_binomial(biting_I, p_susceptible)
+        if bites_on_sus == 0:
+            return
+
+        # 3. Transmisión exitosa (probabilidad α)
+        new_infections = self._safe_binomial(bites_on_sus, alpha)
+        if new_infections <= 0:
+            return
+
+        # 4. Limitar a humanos susceptibles disponibles
+        new_infections = min(new_infections, H_s)
+
+        # 5. Infectar humanos seleccionados aleatoriamente
+        for human in model.random.sample(susceptible_humans, new_infections):
             human.get_exposed()
-            # Remover de susceptibles (ya no puede ser infectado de nuevo)
-            susceptible_humans.remove(human)
     
     def _human_to_mosquito_transmission(self, x: int, y: int, humanos: List,
-                                       trans_prob: float, model: 'DengueModel'):
+                                       beta: float, model: 'DengueModel'):
         """
         Transmisión de humanos infecciosos a mosquitos susceptibles.
         
+        MODELO EXPLÍCITO DE PICADURA:
+        1. Mosquitos susceptibles pican con probabilidad bite_rate
+        2. Picaduras se distribuyen entre humanos (proporción infecciosos)
+        3. Transmisión ocurre con probabilidad β dado que picó
+        
         Parameters
         ----------
         x, y : int
             Coordenadas de la celda
         humanos : List
-            Lista de agentes humanos en la celda
-        trans_prob : float
-            Probabilidad de transmisión humano→mosquito (β)
+            Lista de agentes humanos en el vecindario
+        beta : float
+            Probabilidad de transmisión humano→mosquito (β) dado que picó
         model : DengueModel
             Modelo principal
         """
-        # Contar humanos infecciosos
-        infectious_humans = sum(1 for h in humanos if h.es_infeccioso())
-        
-        if infectious_humans == 0:
+        S = int(self.S_m[x, y])
+        if S <= 0:
             return
-        
-        # Proporción de humanos infecciosos en la celda
-        p_infectious = infectious_humans / len(humanos)
-        
-        # Mosquitos susceptibles que se infectan
-        # Cada mosquito susceptible tiene probabilidad trans_prob * p_infectious de infectarse
-        new_exposed = np.random.binomial(int(self.S_m[x, y]), trans_prob * p_infectious)
-        
-        if new_exposed > 0:
-            self.S_m[x, y] -= new_exposed
-            self.E_m[x, y] += new_exposed
+
+        infectious_humans = [h for h in humanos if h.es_infeccioso()]
+        H_i = len(infectious_humans)
+        H_tot = len(humanos)
+
+        if H_tot == 0 or H_i == 0:
+            return
+
+        # 1. Mosquitos susceptibles que pican hoy
+        bite_rate = getattr(model, "bite_rate", 0.33)
+        biting_S = self._safe_binomial(S, bite_rate)
+        if biting_S == 0:
+            return
+
+        # 2. Picaduras sobre humanos infecciosos (proporcional a H_i/H_tot)
+        p_infectious = H_i / H_tot
+        bites_on_inf = self._safe_binomial(biting_S, p_infectious)
+        if bites_on_inf == 0:
+            return
+
+        # 3. Transmisión exitosa (probabilidad β)
+        new_E = self._safe_binomial(bites_on_inf, beta)
+        if new_E <= 0:
+            return
+
+        # 4. Limitar a mosquitos susceptibles disponibles
+        new_E = min(new_E, S)
+        self.S_m[x, y] -= new_E
+        self.E_m[x, y] += new_E
     
     def _process_reproduction(self, x: int, y: int, model: 'DengueModel'):
         """

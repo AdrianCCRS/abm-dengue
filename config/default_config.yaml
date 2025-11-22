@@ -23,8 +23,9 @@ mosquito_disease:
   incubation_period: 10        # EIP = 10 días (período de incubación extrínseca)
 
 transmission:
-  mosquito_to_human_prob: 0.6
-  human_to_mosquito_prob: 0.275
+  mosquito_to_human_prob: 0.6     # α - Probabilidad de transmisión dado que picó
+  human_to_mosquito_prob: 0.275   # β - Probabilidad de transmisión dado que picó
+  bite_rate: 0.33                 # Probabilidad de picadura diaria (~1 comida cada 3 días)
 
 mobility:
   # Probabilidades diarias de ubicación por tipo de agente
