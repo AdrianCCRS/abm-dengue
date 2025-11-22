@@ -461,24 +461,11 @@ class MosquitoAgent(Agent):
         if self.pos is None:
             return None
         
-        # Log para debugging
-        import time
-        start = time.time()
-        
         # Obtener sitios cercanos usando el índice espacial del modelo
-        # Esto solo busca en sectores relevantes (mucho más rápido)
         sitios_candidatos = self.model.obtener_sitios_cercanos(self.pos, self.max_range)
-        
-        elapsed_query = time.time() - start
-        if elapsed_query > 0.01:  # Si tarda más de 10ms
-            print(f"\n[WARN] Mosquito {self.unique_id}: Consulta índice espacial tardó {elapsed_query*1000:.1f}ms", flush=True)
         
         if not sitios_candidatos:
             return None
-        
-        # Log si hay muchos candidatos (indica problema con índice)
-        if len(sitios_candidatos) > 500:
-            print(f"\n[WARN] Mosquito {self.unique_id}: Índice retornó {len(sitios_candidatos)} candidatos (demasiados!)", flush=True)
         
         # Buscar el sitio más cercano dentro del rango
         x, y = self.pos
@@ -497,10 +484,6 @@ class MosquitoAgent(Agent):
             if dist_sq <= max_range_sq and dist_sq < mejor_dist_sq:
                 mejor_dist_sq = dist_sq
                 mejor_sitio = sitio
-        
-        elapsed_total = time.time() - start
-        if elapsed_total > 0.1:  # Si tarda más de 100ms
-            print(f"\n[SLOW] Búsqueda lenta: {elapsed_total*1000:.1f}ms ({len(sitios_candidatos)} candidatos)", flush=True)
         
         return mejor_sitio
     

@@ -586,28 +586,33 @@ class DengueModel(Model):
         #self._aplicar_control()
         
         # 5. Activar todos los agentes (actualiza estados, movimiento, interacciones)
-        print(f"\n[STEP] Activando {len(self.agents)} agentes...", flush=True)
-        import time
-        start_time = time.time()
+        # OPTIMIZACIÓN: Solo log cada 10 días para reducir overhead de I/O
+        verbose = (self.dia_simulacion % 10 == 0)
         
-        # Contar tipos de agentes
-        from src.agents.human_agent import HumanAgent
-        from src.agents.mosquito_agent import MosquitoAgent
-        humanos = sum(1 for a in self.agents if isinstance(a, HumanAgent))
-        mosquitos = sum(1 for a in self.agents if isinstance(a, MosquitoAgent))
-        print(f"   Humanos: {humanos}, Mosquitos: {mosquitos}", flush=True)
+        if verbose:
+            print(f"\n[STEP] Activando {len(self.agents)} agentes...", flush=True)
+            import time
+            start_time = time.time()
+            
+            # Contar tipos de agentes
+            from src.agents.human_agent import HumanAgent
+            from src.agents.mosquito_agent import MosquitoAgent
+            humanos = sum(1 for a in self.agents if isinstance(a, HumanAgent))
+            mosquitos = sum(1 for a in self.agents if isinstance(a, MosquitoAgent))
+            print(f"   Humanos: {humanos}, Mosquitos: {mosquitos}", flush=True)
         
         agentes_lista = list(self.agents)
         self.random.shuffle(agentes_lista)
         
         for idx, agente in enumerate(agentes_lista):
-            if idx % 500 == 0:
+            if verbose and idx % 500 == 0:
                 elapsed = time.time() - start_time
                 print(f"   Procesando agente {idx}/{len(agentes_lista)} ({idx/len(agentes_lista)*100:.1f}%) - {elapsed:.2f}s", flush=True)
             agente.step()
         
-        elapsed = time.time() - start_time
-        print(f"[OK] Agentes activados en {elapsed:.2f}s", flush=True)
+        if verbose:
+            elapsed = time.time() - start_time
+            print(f"[OK] Agentes activados en {elapsed:.2f}s", flush=True)
         
         # 4. Recolectar datos
         self.datacollector.collect(self)

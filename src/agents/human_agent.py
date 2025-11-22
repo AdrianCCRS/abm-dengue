@@ -213,6 +213,15 @@ class HumanAgent(Agent):
         - Con prob_aislamiento: permanecen en casa (aislamiento completo)
         - Sin aislamiento: movilidad reducida (radio limitado)
         """
+        # OPTIMIZACIÓN: Skip para estacionarios que ya están en casa
+        # Estacionarios tienen 95% prob de quedarse en casa, si ya están allí, skip
+        if (self.tipo == TipoMovilidad.ESTACIONARIO and 
+            self.pos == self.pos_hogar and 
+            self.estado != EstadoSalud.INFECTADO):
+            # 95% de probabilidad de quedarse, solo procesar el 5% restante
+            if self.random.random() < 0.95:
+                return  # Skip movimiento
+        
         # Infectados: decisión de aislamiento
         if self.estado == EstadoSalud.INFECTADO:
             # Decidir aislamiento al momento de infectarse (una sola vez)
