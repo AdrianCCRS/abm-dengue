@@ -148,8 +148,20 @@ def run_debug(num_steps=3):
     
     config_path = Path(__file__).parent / 'config' / 'default_config.yaml'
     
-    print(f"\nCreando modelo...")
-    model = DengueModel(config_file=str(config_path))
+    print(f"\nCargando configuración desde {config_path}...")
+    
+    # Cargar configuración para obtener climate_data_path
+    import yaml
+    with open(config_path, 'r') as f:
+        config = yaml.safe_load(f)
+    
+    climate_data_path = config.get('climate_data_path', 'data/climate/bucaramanga_climate.csv')
+    
+    print(f"Creando modelo con datos climáticos: {climate_data_path}...")
+    model = DengueModel(
+        config_file=str(config_path),
+        climate_data_path=climate_data_path
+    )
     
     # Crear debugger e instrumentar
     debugger = BottleneckDebugger()
