@@ -156,7 +156,7 @@ def run_debug(num_steps=3):
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
     
-    climate_data_path = config.get('climate_data_path', 'data/climate/bucaramanga_climate.csv')
+    climate_data_path = config.get('climate_data_path', 'data/raw/bucaramanga_climate.csv')
     
     # Convertir a ruta absoluta si es relativa
     if not Path(climate_data_path).is_absolute():
