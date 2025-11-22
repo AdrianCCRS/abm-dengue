@@ -91,6 +91,9 @@ class EggManager:
         se agregan al lote existente. Esto maximiza la agrupación y reduce
         el número de objetos.
         
+        CAPACIDAD DE CARGA: Implementa un límite máximo de 500 huevos por sitio
+        para simular competencia larvaria y limitación de recursos.
+        
         Parameters
         ----------
         sitio_cria : Tuple[int, int]
@@ -100,6 +103,18 @@ class EggManager:
         """
         if cantidad <= 0:
             return
+        
+        # OPTIMIZACIÓN: Capacidad máxima por sitio (competencia larvaria)
+        MAX_EGGS_PER_SITE = 500
+        huevos_actuales = self.get_eggs_by_site(sitio_cria)
+        
+        # Si el sitio está lleno, no agregar más huevos
+        if huevos_actuales >= MAX_EGGS_PER_SITE:
+            return
+        
+        # Limitar cantidad a agregar según capacidad restante
+        capacidad_restante = MAX_EGGS_PER_SITE - huevos_actuales
+        cantidad = min(cantidad, capacidad_restante)
         
         # Buscar lote existente en el mismo sitio y mismo día
         dia_actual = self.model.dia_simulacion
@@ -161,28 +176,41 @@ class EggManager:
         """
         Convierte un lote de huevos en mosquitos adultos.
         
-        Crea agentes MosquitoAgent para cada huevo del lote y los coloca
-        en el sitio de cría correspondiente.
+        MODELO METAPOBLACIONAL: En lugar de crear agentes individuales,
+        agrega mosquitos susceptibles al grid de poblaciones en la celda
+        correspondiente al sitio de cría.
         
         Parameters
         ----------
         batch : EggBatch
             Lote de huevos a eclosionar
         """
-        from ..agents.mosquito_agent import MosquitoAgent, EtapaVida
-        
-        for _ in range(batch.cantidad):
-            # Crear mosquito adulto
-            mosquito = MosquitoAgent(
-                unique_id=self.model.next_id(),
-                model=self.model,
-                etapa=EtapaVida.ADULTO,
-                sitio_cria=batch.sitio_cria
+        # Agregar mosquitos susceptibles al grid de poblaciones
+        # (modelo metapoblacional - no crear agentes individuales)
+        if hasattr(self.model, 'mosquito_pop'):
+            # Usar modelo metapoblacional
+            from .mosquito_population import MosquitoState
+            self.model.mosquito_pop.add_mosquitos(
+                batch.sitio_cria, 
+                batch.cantidad,
+                MosquitoState.SUSCEPTIBLE
             )
+        else:
+            # Fallback: crear agentes individuales (versión antigua)
+            from ..agents.mosquito_agent import MosquitoAgent, EtapaVida
             
-            # Colocar en el sitio de cría
-            self.model.grid.place_agent(mosquito, batch.sitio_cria)
-            self.model.agents.add(mosquito)
+            for _ in range(batch.cantidad):
+                # Crear mosquito adulto
+                mosquito = MosquitoAgent(
+                    unique_id=self.model.next_id(),
+                    model=self.model,
+                    etapa=EtapaVida.ADULTO,
+                    sitio_cria=batch.sitio_cria
+                )
+                
+                # Colocar en el sitio de cría
+                self.model.grid.place_agent(mosquito, batch.sitio_cria)
+                self.model.agents.add(mosquito)
     
     def count_eggs(self) -> int:
         """

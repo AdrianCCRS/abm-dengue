@@ -203,7 +203,11 @@ class DengueModel(Model):
         # Gestor de huevos (optimización: huevos no son agentes)
         self.egg_manager = EggManager(self)
         
-        # Crear agentes
+        # Grid de poblaciones de mosquitos (modelo metapoblacional)
+        from .mosquito_population import MosquitoPopulationGrid
+        self.mosquito_pop = MosquitoPopulationGrid(self.width, self.height)
+        
+        # Crear agentes (solo humanos - mosquitos van al grid)
         self._crear_humanos(num_humanos, self.infectados_iniciales)
         self._crear_mosquitos(num_mosquitos, self.mosquitos_infectados_iniciales)
         
@@ -582,24 +586,25 @@ class DengueModel(Model):
         if self.egg_mortality_rate > 0:
             self.egg_manager.apply_mortality(self.egg_mortality_rate)
          
-        # 4. Aplicar estrategias de control
+        # 4. Procesar mosquitos (modelo metapoblacional - RÁPIDO)
+        self.mosquito_pop.step(self)
+        
+        # 5. Aplicar estrategias de control
         #self._aplicar_control()
         
-        # 5. Activar todos los agentes (actualiza estados, movimiento, interacciones)
+        # 6. Activar agentes humanos (solo humanos, no mosquitos)
         # OPTIMIZACIÓN: Solo log cada 10 días para reducir overhead de I/O
         verbose = (self.dia_simulacion % 10 == 0)
         
         if verbose:
-            print(f"\n[STEP] Activando {len(self.agents)} agentes...", flush=True)
+            print(f"\n[STEP] Activando {len(self.agents)} agentes humanos...", flush=True)
             import time
             start_time = time.time()
             
-            # Contar tipos de agentes
-            from src.agents.human_agent import HumanAgent
-            from src.agents.mosquito_agent import MosquitoAgent
-            humanos = sum(1 for a in self.agents if isinstance(a, HumanAgent))
-            mosquitos = sum(1 for a in self.agents if isinstance(a, MosquitoAgent))
-            print(f"   Humanos: {humanos}, Mosquitos: {mosquitos}", flush=True)
+            # Contar mosquitos en grid
+            mosquitos_total = self.mosquito_pop.total_mosquitos()
+            mosquitos_infectados = self.mosquito_pop.total_infectious()
+            print(f"   Humanos: {len(self.agents)}, Mosquitos (grid): {mosquitos_total} (I:{mosquitos_infectados})", flush=True)
         
         agentes_lista = list(self.agents)
         self.random.shuffle(agentes_lista)
@@ -612,9 +617,9 @@ class DengueModel(Model):
         
         if verbose:
             elapsed = time.time() - start_time
-            print(f"[OK] Agentes activados en {elapsed:.2f}s", flush=True)
+            print(f"[OK] Agentes humanos activados en {elapsed:.2f}s", flush=True)
         
-        # 4. Recolectar datos
+        # 7. Recolectar datos
         self.datacollector.collect(self)
     
     def _actualizar_clima(self):
@@ -1062,11 +1067,13 @@ class DengueModel(Model):
     
     def _crear_mosquitos(self, num_mosquitos: int, infectados_iniciales: int):
         """
-        Crea la población inicial de mosquitos adultos.
+        Inicializa la población de mosquitos en el grid metapoblacional.
         
-        Optimización: Solo crea hembras (100%), ya que los machos no aportan
-        información al modelo epidemiológico (no pican, no transmiten, no ponen huevos).
-        El apareamiento se modela implícitamente con mating_probability.
+        MODELO METAPOBLACIONAL: En lugar de crear agentes individuales,
+        distribuye mosquitos en celdas del grid como contadores S/I.
+        
+        Distribución espacial: Los mosquitos se distribuyen aleatoriamente
+        entre las celdas del grid, con preferencia por sitios de cría.
         
         Parameters
         ----------
@@ -1075,29 +1082,35 @@ class DengueModel(Model):
         infectados_iniciales : int
             Número de mosquitos infectados al inicio
         """
-        infectados_asignados = 0
+        # Distribuir mosquitos entre celdas
+        # Preferencia: sitios de cría (80%) vs celdas aleatorias (20%)
         
-        for i in range(num_mosquitos):
-            # Posición aleatoria
-            pos = (self.random.randrange(self.width),
-                  self.random.randrange(self.height))
+        mosquitos_susceptibles = num_mosquitos - infectados_iniciales
+        mosquitos_infectados = infectados_iniciales
+        
+        # Distribuir susceptibles
+        for _ in range(mosquitos_susceptibles):
+            if self.sitios_cria and self.random.random() < 0.8:
+                # 80% en sitios de cría
+                pos = self.random.choice(self.sitios_cria)
+            else:
+                # 20% en celdas aleatorias
+                pos = (self.random.randrange(self.width),
+                      self.random.randrange(self.height))
             
-            # Crear agente (solo hembras)
-            unique_id = self.next_id()
-            mosquito = MosquitoAgent(
-                unique_id=unique_id,
-                model=self,
-                etapa=EtapaVida.ADULTO
-            )
+            from .mosquito_population import MosquitoState
+            self.mosquito_pop.add_mosquitos(pos, 1, MosquitoState.SUSCEPTIBLE)
+        
+        # Distribuir infectados
+        for _ in range(mosquitos_infectados):
+            if self.sitios_cria and self.random.random() < 0.8:
+                pos = self.random.choice(self.sitios_cria)
+            else:
+                pos = (self.random.randrange(self.width),
+                      self.random.randrange(self.height))
             
-            # Asignar estado infectado a algunos
-            if infectados_asignados < infectados_iniciales:
-                mosquito.estado = EstadoMosquito.INFECTADO
-                infectados_asignados += 1
-            
-            # Colocar en grid y agregar a scheduler
-            self.grid.place_agent(mosquito, pos)
-            self.agents.add(mosquito)
+            from .mosquito_population import MosquitoState
+            self.mosquito_pop.add_mosquitos(pos, 1, MosquitoState.INFECTIOUS)
     
     def _crear_huevos(self, num_huevos: int):
         """
@@ -1151,15 +1164,19 @@ class DengueModel(Model):
     
     def _contar_mosquitos_estado(self, estado: EstadoMosquito) -> int:
         """Cuenta mosquitos adultos en un estado epidemiológico específico."""
-        return sum(1 for a in self.agents 
-                  if isinstance(a, MosquitoAgent) 
-                  and a.etapa == EtapaVida.ADULTO 
-                  and a.estado == estado)
+        # Usar grid de poblaciones
+        from .mosquito_population import MosquitoState
+        
+        if estado == EstadoMosquito.SUSCEPTIBLE:
+            return self.mosquito_pop.S_m.sum()
+        elif estado == EstadoMosquito.INFECTADO:
+            return self.mosquito_pop.I_m.sum()
+        else:
+            return 0
     
     def _contar_mosquitos_adultos(self) -> int:
         """Cuenta total de mosquitos adultos."""
-        return sum(1 for a in self.agents 
-                  if isinstance(a, MosquitoAgent) and a.etapa == EtapaVida.ADULTO)
+        return self.mosquito_pop.total_mosquitos()
     
     def _contar_huevos(self) -> int:
         """Cuenta total de huevos usando EggManager."""
