@@ -11,14 +11,18 @@ Uso:
 
 import time
 import sys
+import os
 from pathlib import Path
 from collections import defaultdict
 
-sys.path.insert(0, str(Path(__file__).parent / 'src'))
+# Agregar directorio raíz al path
+root_dir = Path(__file__).parent
+sys.path.insert(0, str(root_dir))
 
-from model.dengue_model import DengueModel
-from agents.mosquito_agent import MosquitoAgent
-from agents.human_agent import HumanAgent
+# Importar directamente desde src
+from src.model.dengue_model import DengueModel
+from src.agents.mosquito_agent import MosquitoAgent
+from src.agents.human_agent import HumanAgent
 
 
 class BottleneckDebugger:
