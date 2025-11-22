@@ -21,6 +21,7 @@ mosquito_disease:
   mortality_rate: 0.08         # Mr = 0.08 por día - Vida media ~12 días (balance entre realismo y epidemia sostenible)
   sensory_range: 3
   incubation_period: 10        # EIP = 10 días (período de incubación extrínseca)
+  carrying_capacity_per_cell: 3000  # Máximo mosquitos por celda (evita crecimiento exponencial)
 
 transmission:
   mosquito_to_human_prob: 0.6     # α - Probabilidad de transmisión dado que picó

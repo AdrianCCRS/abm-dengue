@@ -318,6 +318,7 @@ class DengueModel(Model):
         self.mortality_rate = mosquito_disease.get('mortality_rate', 0.05)
         self.sensory_range = mosquito_disease.get('sensory_range', 3)
         self.mosquito_incubation_period = mosquito_disease.get('incubation_period', 10)  # EIP (días)
+        self.carrying_capacity_per_cell = mosquito_disease.get('carrying_capacity_per_cell', 3000)
         
         # Parámetros de transmisión
         transmission = config.get('transmission', {})

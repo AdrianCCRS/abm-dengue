@@ -75,10 +75,9 @@ class MosquitoPopulationGrid:
         self.E_m = np.zeros((width, height), dtype=np.int32)
         self.I_m = np.zeros((width, height), dtype=np.int32)
         
-        # Capacidad de carga por celda (evita crecimiento exponencial)
-        # Basado en densidad realista de mosquitos por área
-        # Ajustado a 3000 para preservar población inicial (~1500 mosquitos)
-        self.CARRYING_CAPACITY_PER_CELL = 3000  # Máximo mosquitos por celda
+        # Capacidad de carga por celda (se carga desde configuración)
+        # Se inicializa en None y se establece cuando se pasa el modelo
+        self.carrying_capacity_per_cell = None
     
     def add_mosquitos(self, pos: Tuple[int, int], count: int, state: MosquitoState = MosquitoState.SUSCEPTIBLE):
         """
@@ -227,7 +226,7 @@ class MosquitoPopulationGrid:
         self._process_reproduction(x, y, model)
         
         # 5. Aplicar capacidad de carga (evita crecimiento exponencial)
-        self._apply_carrying_capacity(x, y)
+        self._apply_carrying_capacity(x, y, model)
     
     def _apply_mortality(self, x: int, y: int, model: 'DengueModel'):
         """
@@ -535,7 +534,7 @@ class MosquitoPopulationGrid:
             # (simplificación: usar la celda actual como sitio)
             model.egg_manager.add_eggs((x, y), eggs)
     
-    def _apply_carrying_capacity(self, x: int, y: int):
+    def _apply_carrying_capacity(self, x: int, y: int, model: 'DengueModel'):
         """
         Aplica capacidad de carga a una celda.
         
@@ -546,12 +545,17 @@ class MosquitoPopulationGrid:
         ----------
         x, y : int
             Coordenadas de la celda
+        model : DengueModel
+            Modelo principal (para obtener carrying_capacity_per_cell)
         """
         total = self.S_m[x, y] + self.E_m[x, y] + self.I_m[x, y]
         
-        if total > self.CARRYING_CAPACITY_PER_CELL:
+        # Obtener capacidad de carga desde modelo
+        capacity = getattr(model, 'carrying_capacity_per_cell', 3000)
+        
+        if total > capacity:
             # Reducir proporcionalmente
-            factor = self.CARRYING_CAPACITY_PER_CELL / total
+            factor = capacity / total
             self.S_m[x, y] = int(self.S_m[x, y] * factor)
             self.E_m[x, y] = int(self.E_m[x, y] * factor)
             self.I_m[x, y] = int(self.I_m[x, y] * factor)
