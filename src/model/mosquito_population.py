@@ -269,8 +269,8 @@ class MosquitoPopulationGrid:
             return
         
         # Período de incubación extrínseca (días)
-        # Aproximación: transición diaria proporcional
-        eip = 10  # Típicamente 8-12 días para dengue
+        # Usar parámetro del modelo si existe, sino default 10 días
+        eip = getattr(model, 'mosquito_incubation_period', 10)
         transition_rate = 1.0 / eip
         
         # Mosquitos que completan incubación
@@ -283,6 +283,10 @@ class MosquitoPopulationGrid:
         """
         Procesa picaduras y transmisión bidireccional en una celda.
         
+        IMPORTANTE: Los mosquitos en esta celda pueden picar humanos en un
+        vecindario (Moore neighborhood), emulando el vuelo de mosquitos del
+        modelo original sin simular trayectorias individuales.
+        
         Implementa:
         1. Mosquitos infecciosos → Humanos susceptibles
         2. Humanos infecciosos → Mosquitos susceptibles
@@ -294,14 +298,24 @@ class MosquitoPopulationGrid:
         model : DengueModel
             Modelo principal
         """
-        # Obtener humanos en esta celda
-        humanos = model.grid.get_cell_list_contents([(x, y)])
-        if not humanos:
-            return
+        # Obtener humanos en vecindario Moore (radio = sensory_range)
+        # Esto emula que los mosquitos vuelan para buscar humanos
+        radius = model.sensory_range
         
-        # Filtrar solo humanos (no mosquitos si hubiera agentes mixtos)
-        from ..agents.human_agent import HumanAgent
-        humanos = [a for a in humanos if isinstance(a, HumanAgent)]
+        # Obtener vecinos en radio (incluye celda central)
+        neighbors = model.grid.get_neighborhood(
+            (x, y),
+            moore=True,
+            include_center=True,
+            radius=radius
+        )
+        
+        # Obtener todos los humanos en el vecindario
+        humanos = []
+        for neighbor_pos in neighbors:
+            agents_in_cell = model.grid.get_cell_list_contents([neighbor_pos])
+            from ..agents.human_agent import HumanAgent
+            humanos.extend([a for a in agents_in_cell if isinstance(a, HumanAgent)])
         
         if not humanos:
             return

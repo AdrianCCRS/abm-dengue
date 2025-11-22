@@ -18,8 +18,9 @@ human_disease:
   infectious_period: 6.0
 
 mosquito_disease:
-  mortality_rate: 0.08         # Mr = 0.08 por día - Vida media ~12 días (más realista para campo)
+  mortality_rate: 0.12         # Mr = 0.12 por día - Vida media ~8 días (agresivo para control poblacional)
   sensory_range: 3
+  incubation_period: 10        # EIP = 10 días (período de incubación extrínseca)
 
 transmission:
   mosquito_to_human_prob: 0.6
@@ -71,7 +72,7 @@ mobility:
 
 
 mosquito_breeding:
-  eggs_per_female: 35          # Reducido de 50 a 35 (más realista, -30% huevos)
+  eggs_per_female: 25          # Reducido agresivamente a 25 (-50% vs original 50)
   mating_probability: 0.6
   female_ratio: 0.52
   # Modelo de grados-día acumulados (GDD) para desarrollo inmaduro
@@ -82,11 +83,11 @@ mosquito_breeding:
   breeding_site_ratio: 0.2
   
   # Ciclo gonotrófico (reproducción de hembras)
-  gonotrophic_cycle_days: 4     # Días mínimos entre puestas (aumentado de 3 a 4, -25% frecuencia)
+  gonotrophic_cycle_days: 6     # Días mínimos entre puestas (aumentado a 6, -50% frecuencia vs original)
                                  # Referencia: Scott et al. (1993), Maciel-de-Freitas et al. (2006)
   
   # Mortalidad de huevos
-  egg_mortality_rate: 0.05      # 5% mortalidad diaria (aumentado de 3% a 5%, ~60% supervivencia a 10 días)
+  egg_mortality_rate: 0.10      # 10% mortalidad diaria (aumentado agresivamente, ~35% supervivencia a 10 días)
                                  # Causas: desecación, depredación, condiciones adversas
   
   # Sitios de cría temporales (charcos post-lluvia)
