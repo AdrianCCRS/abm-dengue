@@ -245,6 +245,55 @@ class EggManager:
         for batch in batches_to_remove:
             self.egg_batches.remove(batch)
     
+    def apply_temperature_mortality(self):
+        """
+        Aplica mortalidad de huevos basada en temperatura extrema.
+        
+        Rangos de mortalidad:
+        - T < 10°C: 90% mortalidad (frío extremo)
+        - T > 40°C: 80% mortalidad (calor extremo)
+        - 10°C < T < 15°C o 35°C < T < 40°C: 50% mortalidad (subóptimo)
+        - 15°C <= T <= 35°C: Mortalidad base normal
+        
+        Este método se llama diariamente después del desarrollo.
+        """
+        temperatura = self.model.temperatura_actual
+        
+        # Determinar tasa de mortalidad según temperatura
+        if temperatura < self.model.temp_extreme_cold:
+            # Frío extremo
+            mortality_rate = self.model.egg_mortality_extreme_cold
+        elif temperatura > self.model.temp_extreme_heat:
+            # Calor extremo
+            mortality_rate = self.model.egg_mortality_extreme_heat
+        elif temperatura < self.model.temp_suboptimal_cold or temperatura > self.model.temp_suboptimal_heat:
+            # Temperatura subóptima
+            mortality_rate = self.model.egg_mortality_suboptimal
+        else:
+            # Temperatura óptima - no aplicar mortalidad extra
+            return
+        
+        # Aplicar mortalidad a cada lote
+        batches_to_remove = []
+        for batch in self.egg_batches:
+            if batch.cantidad > 0:
+                # Calcular muertes
+                muertes_esperadas = batch.cantidad * mortality_rate
+                muertes = int(muertes_esperadas)
+                # Probabilidad de muerte adicional (parte fraccionaria)
+                if self.model.random.random() < (muertes_esperadas - muertes):
+                    muertes += 1
+                
+                batch.cantidad -= muertes
+                
+                # Marcar para eliminación si no quedan huevos
+                if batch.cantidad <= 0:
+                    batches_to_remove.append(batch)
+        
+        # Eliminar lotes vacíos
+        for batch in batches_to_remove:
+            self.egg_batches.remove(batch)
+    
     def apply_lsm_control(self, coverage: float, effectiveness: float):
         """
         Aplica control larvario (LSM) a los lotes de huevos.

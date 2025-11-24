@@ -232,6 +232,11 @@ class MosquitoPopulationGrid:
         """
         Aplica mortalidad diaria a mosquitos en una celda.
         
+        La mortalidad se ajusta según la temperatura:
+        - T < 10°C o T > 40°C: mortalidad × 2.5 (extremo)
+        - T < 15°C o T > 35°C: mortalidad × 1.5 (subóptimo)
+        - 15°C <= T <= 35°C: mortalidad base
+        
         Usa muestreo binomial para determinar muertes en cada compartimento.
         
         Parameters
@@ -241,7 +246,24 @@ class MosquitoPopulationGrid:
         model : DengueModel
             Modelo principal
         """
-        mortality_rate = model.mortality_rate
+        # Mortalidad base
+        base_mortality = model.mortality_rate
+        
+        # Ajustar por temperatura
+        temperatura = model.temperatura_actual
+        
+        if temperatura < model.temp_extreme_cold or temperatura > model.temp_extreme_heat:
+            # Temperatura extrema
+            mortality_rate = base_mortality * model.mosquito_mortality_extreme_mult
+        elif temperatura < model.temp_suboptimal_cold or temperatura > model.temp_suboptimal_heat:
+            # Temperatura subóptima
+            mortality_rate = base_mortality * model.mosquito_mortality_suboptimal_mult
+        else:
+            # Temperatura óptima
+            mortality_rate = base_mortality
+        
+        # Limitar mortalidad a 1.0 (100%)
+        mortality_rate = min(1.0, mortality_rate)
         
         # Mortalidad por compartimento (binomial o aproximación normal)
         if self.S_m[x, y] > 0:

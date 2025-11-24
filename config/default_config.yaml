@@ -111,3 +111,21 @@ serotypes:
   num_serotypes: 4
   cross_immunity_duration_days: 75  # ~2.5 meses de inmunidad cruzada temporal
   initial_distribution: [0.25, 0.25, 0.25, 0.25]  # DENV-1, DENV-2, DENV-3, DENV-4
+
+climate_effects:
+  # Rangos de temperatura óptima y extrema (°C)
+  temperature_optimal_min: 25
+  temperature_optimal_max: 30
+  temperature_extreme_cold: 10  # Mortalidad muy alta
+  temperature_extreme_heat: 40  # Mortalidad muy alta
+  temperature_suboptimal_cold: 15  # Mortalidad moderada
+  temperature_suboptimal_heat: 35  # Mortalidad moderada
+  
+  # Multiplicadores de mortalidad de mosquitos adultos
+  mosquito_mortality_extreme_multiplier: 2.5  # T < 10°C o T > 40°C
+  mosquito_mortality_suboptimal_multiplier: 1.5  # T < 15°C o T > 35°C
+  
+  # Mortalidad de huevos por temperatura
+  egg_mortality_extreme_cold: 0.90  # 90% mueren si T < 10°C
+  egg_mortality_extreme_heat: 0.80  # 80% mueren si T > 40°C
+  egg_mortality_suboptimal: 0.50    # 50% mueren si 10°C < T < 15°C o 35°C < T < 40°C
