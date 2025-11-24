@@ -88,6 +88,7 @@ class HumanAgent(Agent):
         # Estado epidemiológico
         self.estado = EstadoSalud.SUSCEPTIBLE
         self.dias_en_estado = 0
+        self.immunity_loss_prob = getattr(model, 'immunity_loss_prob', 0.005)  # 0.5% por defecto
         
         # Movilidad
         self.tipo = tipo_movilidad
@@ -148,7 +149,7 @@ class HumanAgent(Agent):
         - S → E: Al ser picado por mosquito infectado (manejado en interacción)
         - E → I: Después de duracion_expuesto días
         - I → R: Después de duracion_infectado días
-        - R → S: Probabilidad Prc = 0 (inmunidad permanente en este modelo)
+        - R → S: Con probabilidad immunity_loss_prob (pérdida de inmunidad temporal)
         """
         self.dias_en_estado += 1
         
@@ -164,6 +165,13 @@ class HumanAgent(Agent):
                 # Resetear flag de aislamiento para futuras reinfecciones
                 if hasattr(self, '_aislamiento_decidido'):
                     self._aislamiento_decidido = False
+        
+        elif self.estado == EstadoSalud.RECUPERADO:
+            # Pérdida de inmunidad temporal: R → S
+            # Probabilidad diaria (ej: 0.5% = ~18% anual)
+            if self.model.random.random() < self.immunity_loss_prob:
+                self.estado = EstadoSalud.SUSCEPTIBLE
+                self.dias_en_estado = 0
     
     def get_exposed(self):
         """

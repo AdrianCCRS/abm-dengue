@@ -14,6 +14,7 @@ simulation:
 human_disease:
   incubation_period: 5.0        # igual
   infectious_period: 8.0        # antes 9: brote aún fuerte, pero un poco menos prolongado
+  immunity_loss_prob: 0.005     # 0.5% diario = ~18% anual de pérdida de inmunidad (R→S)
 
 mosquito_disease:
   mortality_rate: 0.06          # REDUCIDO: vida ~16.7 días (balance crítico)
