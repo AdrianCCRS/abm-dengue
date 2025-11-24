@@ -170,7 +170,7 @@ class HumanAgent(Agent):
             # Pérdida de inmunidad temporal: R → S
             # Probabilidad diaria (ej: 0.5% = ~18% anual)
             if self.model.random.random() < self.immunity_loss_prob:
-                print(f"[INMUNIDAD] Humano {self.unique_id} perdió inmunidad (R→S) después de {self.dias_en_estado} días")
+                self.model.immunity_losses_count += 1  # Incrementar contador del modelo
                 self.estado = EstadoSalud.SUSCEPTIBLE
                 self.dias_en_estado = 0
     

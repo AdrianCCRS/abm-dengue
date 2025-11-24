@@ -324,6 +324,7 @@ class DengueModel(Model):
         self.incubation_period = human_disease.get('incubation_period', 5.0)
         self.infectious_period = human_disease.get('infectious_period', 6.0)
         self.immunity_loss_prob = human_disease.get('immunity_loss_prob', 0.005)  # Pérdida de inmunidad R→S
+        self.immunity_losses_count = 0  # Contador de pérdidas de inmunidad R→S
         
         # Parámetros de enfermedad mosquito (SI)
         mosquito_disease = config.get('mosquito_disease', {})

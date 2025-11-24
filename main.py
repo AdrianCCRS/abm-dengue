@@ -163,8 +163,8 @@ def ejecutar_simulacion(
     for i in range(steps):
         modelo.step()
         
-        # Mostrar progreso cada 10 días para seguimiento detallado
-        if verbose and (i % 10 == 9 or i == 0 or i == steps - 1):
+        # Mostrar progreso diario (pero solo reporte de pérdidas de inmunidad cada 10 días)
+        if verbose:
             infectados = modelo._contar_humanos_estado(EstadoSalud.INFECTADO)
             expuestos = modelo._contar_humanos_estado(EstadoSalud.EXPUESTO)
             recuperados = modelo._contar_humanos_estado(EstadoSalud.RECUPERADO)
@@ -195,6 +195,13 @@ def ejecutar_simulacion(
             # Mostrar charcos si hay
             if charcos > 0:
                 print(f" | Charcos:{charcos:2d}", end='')
+            
+            # Mostrar pérdidas de inmunidad cada 10 días
+            if (i % 10 == 9 or i == 0 or i == steps - 1):
+                perdidas_inmunidad = modelo.immunity_losses_count
+                if perdidas_inmunidad > 0:
+                    print(f" | R→S:{perdidas_inmunidad:3d}", end='')
+                    modelo.immunity_losses_count = 0  # Resetear contador
             
             print()  # Nueva línea
     
