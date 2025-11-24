@@ -17,15 +17,15 @@ human_disease:
   immunity_loss_prob: 0.005     # 0.5% diario = ~18% anual de pérdida de inmunidad (R→S)
 
 mosquito_disease:
-  mortality_rate: 0.06          # REDUCIDO: vida ~16.7 días (balance crítico)
+  mortality_rate: 0.08          # Vida ~12.5 días (más realista para año endémico)
   sensory_range: 2
   incubation_period: 10         # EIP = 10 días
   carrying_capacity_per_cell: 3000
 
 transmission:
-  mosquito_to_human_prob: 0.6   # AUMENTADO: más transmisión
-  human_to_mosquito_prob: 0.45  # AUMENTADO: más mosquitos se infectan
-  bite_rate: 0.7                # AUMENTADO: más picaduras
+  mosquito_to_human_prob: 0.45  # Ajustado para año endémico 2022
+  human_to_mosquito_prob: 0.35  # Reducido para controlar pico
+  bite_rate: 0.5                # Reducido para transmisión más moderada
   vertical_transmission_rate: 0.18  # 18% (máximo científico, Gunther 2007)
 
 mobility:
@@ -52,7 +52,7 @@ mobility:
     random: 0.0
 
 mosquito_breeding:
-  eggs_per_female: 35          # SEGÚN DOCUMENTO: 50 huevos/hembra/ciclo
+  eggs_per_female: 30          # Ajustado para año endémico
   mating_probability: 0.6       # AUMENTADO: más hembras se aparean
   female_ratio: 0.52
   immature_development_threshold: 8.3
@@ -62,7 +62,7 @@ mosquito_breeding:
 
   gonotrophic_cycle_days: 3    # REDUCIDO: ponen huevos más frecuente
 
-  egg_mortality_rate: 0.20     # REDUCIDO: más huevos sobreviven
+  egg_mortality_rate: 0.25     # Aumentado para controlar población
 
   temporary_sites:
     min_rainfall: 5.0
@@ -103,7 +103,7 @@ control:
     effectiveness: 0.7
 
 human_behavior:
-  isolation_probability: 0.3     # antes 0.7
+  isolation_probability: 0.5     # Aumentado para reducir transmisión
   infected_mobility_radius: 1
 
 climate_effects:
