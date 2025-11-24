@@ -223,12 +223,23 @@ class DengueModel(Model):
             huevos_por_sitio = num_huevos // len(self.sitios_cria)
             huevos_restantes = num_huevos % len(self.sitios_cria)
             
+            # Calcular proporción de huevos infectados basado en mosquitos infectados iniciales
+            # Asumimos que si hay mosquitos infectados, algunos huevos también lo están
+            proporcion_mosquitos_infectados = self.mosquitos_infectados_iniciales / max(num_mosquitos, 1)
+            proporcion_huevos_infectados = proporcion_mosquitos_infectados * self.vertical_transmission_rate
+            
             for i, sitio in enumerate(self.sitios_cria):
                 cantidad = huevos_por_sitio
                 if i < huevos_restantes:
                     cantidad += 1
                 if cantidad > 0:
-                    self.egg_manager.add_eggs(sitio, cantidad)
+                    # Calcular huevos infectados (redondeo estocástico)
+                    huevos_infectados_esperados = cantidad * proporcion_huevos_infectados
+                    huevos_infectados = int(huevos_infectados_esperados)
+                    if self.random.random() < (huevos_infectados_esperados - huevos_infectados):
+                        huevos_infectados += 1
+                    
+                    self.egg_manager.add_eggs(sitio, cantidad, huevos_infectados)
         
         # DataCollector para métricas
         self.datacollector = DataCollector(
@@ -325,6 +336,7 @@ class DengueModel(Model):
         self.mosquito_to_human_prob = transmission.get('mosquito_to_human_prob', 0.6)  # α
         self.human_to_mosquito_prob = transmission.get('human_to_mosquito_prob', 0.275)  # β
         self.bite_rate = transmission.get('bite_rate', 0.33)  # Probabilidad de picadura diaria
+        self.vertical_transmission_rate = transmission.get('vertical_transmission_rate', 0.05)  # Transmisión vertical madre→cría
         
         # Parámetros de movilidad humana (probabilidades diarias por tipo)
         mobility = config.get('mobility', {})
@@ -476,6 +488,7 @@ class DengueModel(Model):
         # Parámetros de transmisión
         self.mosquito_to_human_prob = 0.6  # α = 0.6
         self.human_to_mosquito_prob = 0.275  # β = 0.275
+        self.vertical_transmission_rate = 0.05  # Transmisión vertical madre→cría (5%)
         
         # Parámetros de movilidad humana (probabilidades diarias por tipo)
         # Estudiantes (Tipo 1)

@@ -25,12 +25,17 @@ class EggBatch:
     En lugar de crear 100 agentes individuales, se crea un solo objeto
     que representa el lote completo.
     
+    TRANSMISIÓN VERTICAL: Los huevos pueden heredar el virus del dengue
+    de hembras infectadas durante la oviposición (1-10% típicamente).
+    
     Attributes
     ----------
     sitio_cria : Tuple[int, int]
         Coordenadas (x, y) del sitio de cría donde se pusieron los huevos
     cantidad : int
-        Número de huevos en el lote
+        Número total de huevos en el lote (susceptibles + infectados)
+    cantidad_infectados : int
+        Número de huevos infectados por transmisión vertical
     grados_acumulados : float
         Grados-día acumulados para desarrollo (modelo GDD)
     dias_como_huevo : int
@@ -40,6 +45,7 @@ class EggBatch:
     """
     sitio_cria: Tuple[int, int]
     cantidad: int
+    cantidad_infectados: int = 0
     grados_acumulados: float = 0.0
     dias_como_huevo: int = 0
     fecha_puesta: int = 0
@@ -83,13 +89,16 @@ class EggManager:
         self.model = model
         self.egg_batches: List[EggBatch] = []
     
-    def add_eggs(self, sitio_cria: Tuple[int, int], cantidad: int):
+    def add_eggs(self, sitio_cria: Tuple[int, int], cantidad: int, cantidad_infectados: int = 0):
         """
         Agrega un lote de huevos a un sitio de cría.
         
         Si ya existe un lote en el mismo sitio con la misma edad (mismo día),
         se agregan al lote existente. Esto maximiza la agrupación y reduce
         el número de objetos.
+        
+        TRANSMISIÓN VERTICAL: Permite agregar huevos infectados resultantes
+        de la transmisión del virus de madre a cría (1-10% típicamente).
         
         CAPACIDAD DE CARGA: Implementa un límite máximo de 500 huevos por sitio
         para simular competencia larvaria y limitación de recursos.
@@ -99,22 +108,29 @@ class EggManager:
         sitio_cria : Tuple[int, int]
             Coordenadas (x, y) del sitio de cría
         cantidad : int
-            Número de huevos a agregar
+            Número total de huevos a agregar
+        cantidad_infectados : int, default=0
+            Número de huevos infectados (por transmisión vertical)
         """
         if cantidad <= 0:
             return
+        
+        # Validar que infectados no exceda total
+        cantidad_infectados = min(cantidad_infectados, cantidad)
         
         # Buscar lote existente en el mismo sitio y mismo día
         dia_actual = self.model.dia_simulacion
         for batch in self.egg_batches:
             if batch.sitio_cria == sitio_cria and batch.fecha_puesta == dia_actual:
                 batch.cantidad += cantidad
+                batch.cantidad_infectados += cantidad_infectados
                 return
         
         # Crear nuevo lote
         self.egg_batches.append(EggBatch(
             sitio_cria=sitio_cria,
             cantidad=cantidad,
+            cantidad_infectados=cantidad_infectados,
             grados_acumulados=0.0,
             dias_como_huevo=0,
             fecha_puesta=dia_actual
@@ -168,21 +184,36 @@ class EggManager:
         agrega mosquitos susceptibles al grid de poblaciones en la celda
         correspondiente al sitio de cría.
         
+        TRANSMISIÓN VERTICAL: Los huevos infectados eclosionan como mosquitos
+        infecciosos, manteniendo el virus en la población incluso cuando
+        los adultos infectados mueren.
+        
         Parameters
         ----------
         batch : EggBatch
             Lote de huevos a eclosionar
         """
-        # Agregar mosquitos susceptibles al grid de poblaciones
-        # (modelo metapoblacional - no crear agentes individuales)
+        # Agregar mosquitos al grid de poblaciones (modelo metapoblacional)
         if hasattr(self.model, 'mosquito_pop'):
-            # Usar modelo metapoblacional
             from .mosquito_population import MosquitoState
-            self.model.mosquito_pop.add_mosquitos(
-                batch.sitio_cria, 
-                batch.cantidad,
-                MosquitoState.SUSCEPTIBLE
-            )
+            
+            # Mosquitos susceptibles (no infectados)
+            cantidad_susceptibles = batch.cantidad - batch.cantidad_infectados
+            if cantidad_susceptibles > 0:
+                self.model.mosquito_pop.add_mosquitos(
+                    batch.sitio_cria, 
+                    cantidad_susceptibles,
+                    MosquitoState.SUSCEPTIBLE
+                )
+            
+            # Mosquitos infectados por transmisión vertical
+            # Nacen directamente como INFECCIOSOS (pueden transmitir inmediatamente)
+            if batch.cantidad_infectados > 0:
+                self.model.mosquito_pop.add_mosquitos(
+                    batch.sitio_cria, 
+                    batch.cantidad_infectados,
+                    MosquitoState.INFECTIOUS
+                )
         else:
             # Fallback: crear agentes individuales (versión antigua)
             from ..agents.mosquito_agent import MosquitoAgent, EtapaVida
@@ -218,6 +249,9 @@ class EggManager:
         Reduce la cantidad de huevos en cada lote según la tasa de mortalidad.
         Elimina lotes que quedan sin huevos.
         
+        TRANSMISIÓN VERTICAL: Mantiene la proporción de huevos infectados
+        al aplicar mortalidad (la infección no afecta supervivencia del huevo).
+        
         Parameters
         ----------
         mortality_rate : float
@@ -235,7 +269,22 @@ class EggManager:
             if self.model.random.random() < (muertes_esperadas - muertes):
                 muertes += 1
             
+            # Calcular muertes entre infectados (proporcional)
+            if batch.cantidad > 0:
+                proporcion_infectados = batch.cantidad_infectados / batch.cantidad
+                muertes_infectados = int(muertes * proporcion_infectados)
+                
+                # Redondeo estocástico para infectados
+                muertes_inf_esperadas = muertes * proporcion_infectados
+                if self.model.random.random() < (muertes_inf_esperadas - muertes_infectados):
+                    muertes_infectados += 1
+                
+                batch.cantidad_infectados = max(0, batch.cantidad_infectados - muertes_infectados)
+            
             batch.cantidad -= muertes
+            
+            # Asegurar consistencia
+            batch.cantidad_infectados = min(batch.cantidad_infectados, batch.cantidad)
             
             # Marcar para eliminación si no quedan huevos
             if batch.cantidad <= 0:

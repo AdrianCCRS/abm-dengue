@@ -495,6 +495,10 @@ class MosquitoPopulationGrid:
         Solo hembras que han picado pueden reproducirse.
         Los huevos se agregan al EggManager.
         
+        TRANSMISIÓN VERTICAL: Hembras infectadas (I) o expuestas (E) pueden
+        transmitir el virus a sus huevos. La tasa de transmisión vertical
+        típicamente es del 1-10% (configurada en vertical_transmission_rate).
+        
         Parameters
         ----------
         x, y : int
@@ -511,28 +515,50 @@ class MosquitoPopulationGrid:
         female_ratio = model.female_ratio
         eggs_per_female = model.eggs_per_female
         gonotrophic_cycle = model.gonotrophic_cycle_days
+        vertical_transmission_rate = getattr(model, 'vertical_transmission_rate', 0.05)
         
-        # Hembras en la celda
-        females = int(total_mosquitos * female_ratio)
+        # Hembras por estado epidemiológico
+        S_females = int(self.S_m[x, y] * female_ratio)
+        E_females = int(self.E_m[x, y] * female_ratio)
+        I_females = int(self.I_m[x, y] * female_ratio)
         
-        if females == 0:
+        total_females = S_females + E_females + I_females
+        
+        if total_females == 0:
             return
         
         # Hembras que se reproducen (ciclo gonotrófico)
         # Probabilidad diaria = 1 / gonotrophic_cycle_days
         reproduction_prob = 1.0 / gonotrophic_cycle
-        reproducing_females = self._safe_binomial(int(females), reproduction_prob)
         
-        if reproducing_females == 0:
+        reproducing_S = self._safe_binomial(S_females, reproduction_prob)
+        reproducing_E = self._safe_binomial(E_females, reproduction_prob)
+        reproducing_I = self._safe_binomial(I_females, reproduction_prob)
+        
+        total_reproducing = reproducing_S + reproducing_E + reproducing_I
+        
+        if total_reproducing == 0:
             return
         
-        # Huevos puestos (agregar a EggManager)
-        eggs = reproducing_females * eggs_per_female
+        # Huevos puestos por hembras susceptibles (todos susceptibles)
+        eggs_from_S = reproducing_S * eggs_per_female
         
-        if eggs > 0:
-            # Agregar huevos al sitio de cría más cercano
-            # (simplificación: usar la celda actual como sitio)
-            model.egg_manager.add_eggs((x, y), eggs)
+        # Huevos puestos por hembras infectadas/expuestas
+        # Una fracción heredará el virus (transmisión vertical)
+        eggs_from_E = reproducing_E * eggs_per_female
+        eggs_from_I = reproducing_I * eggs_per_female
+        
+        # Calcular huevos infectados por transmisión vertical
+        # Solo hembras I y E pueden transmitir (virus en sangre y tejidos)
+        total_eggs_from_infected = eggs_from_E + eggs_from_I
+        infected_eggs = self._safe_binomial(int(total_eggs_from_infected), vertical_transmission_rate)
+        
+        # Total de huevos
+        total_eggs = eggs_from_S + eggs_from_E + eggs_from_I
+        
+        if total_eggs > 0:
+            # Agregar huevos al sitio de cría (celda actual)
+            model.egg_manager.add_eggs((x, y), total_eggs, infected_eggs)
     
     def _apply_carrying_capacity(self, x: int, y: int, model: 'DengueModel'):
         """

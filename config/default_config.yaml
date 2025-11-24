@@ -16,8 +16,8 @@ human_disease:
   infectious_period: 8.0        # antes 9: brote aún fuerte, pero un poco menos prolongado
 
 mosquito_disease:
-  mortality_rate: 0.08          # antes 0.05 → vida media más corta, controla explosión
-  sensory_range: 2              # antes 3 → contacto más local, menos “super-mixing”
+  mortality_rate: 0.06          # antes 0.08 → vida media ~16.7 días (más realista)
+  sensory_range: 2              # antes 3 → contacto más local, menos "super-mixing"
   incubation_period: 10         # igual (EIP ~10 días)
   carrying_capacity_per_cell: 3000   # antes 10000 → más acorde con docstring del grid
 
@@ -25,6 +25,7 @@ transmission:
   mosquito_to_human_prob: 0.4   # antes 0.6
   human_to_mosquito_prob: 0.25  # antes 0.375
   bite_rate: 0.5                # antes 0.7 (~1 comida cada 2 días aprox.)
+  vertical_transmission_rate: 0.05  # 5% transmisión madre→cría (rango: 1-10%)
 
 mobility:
   student_daily_probabilities:
@@ -50,17 +51,17 @@ mobility:
     random: 0.0
 
 mosquito_breeding:
-  eggs_per_female: 25          # **IMPORTANTE**: el comentario decía 25, pero estaba en 50
+  eggs_per_female: 30          # antes 25 → un poco más huevos por puesta
   mating_probability: 0.6
   female_ratio: 0.52
   immature_development_threshold: 8.3
   immature_thermal_constant: 181.2
   rainfall_threshold: 0.0
-  breeding_site_ratio: 0.10    # antes 0.20 → menos sitios “permanentes”
+  breeding_site_ratio: 0.10    # antes 0.20 → menos sitios "permanentes"
 
-  gonotrophic_cycle_days: 5    # antes 4 → hembras ponen huevos un poco menos frecuente
+  gonotrophic_cycle_days: 4    # antes 5 → hembras ponen huevos más frecuente
 
-  egg_mortality_rate: 0.35     # antes 0.25 → sobreviven menos huevos
+  egg_mortality_rate: 0.25     # antes 0.35 → sobreviven más huevos
 
   temporary_sites:
     min_rainfall: 5.0

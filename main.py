@@ -116,6 +116,16 @@ def ejecutar_simulacion(
     DengueModel
         Modelo ejecutado con datos recolectados
     """
+    # Validar duración de la simulación con datos climáticos
+    if climate_data_path:
+        max_days = 365  # Limitado por los datos climáticos del CSV (2022)
+        if steps > max_days:
+            if verbose:
+                print(f"⚠️  ADVERTENCIA: La simulación solicitada ({steps} días) excede el rango")
+                print(f"   de datos climáticos disponibles ({max_days} días).")
+                print(f"   Se limitará a {max_days} días.\n")
+            steps = max_days
+    
     # Crear modelo
     if verbose:
         print("=" * 70)
