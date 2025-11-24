@@ -22,9 +22,9 @@ mosquito_disease:
   carrying_capacity_per_cell: 3000  # antes 10000 → más acorde con docstring del grid
 
 transmission:
-  mosquito_to_human_prob: 0.4   # antes 0.6
-  human_to_mosquito_prob: 0.25  # antes 0.375
-  bite_rate: 0.5                # antes 0.7 (~1 comida cada 2 días aprox.)
+  mosquito_to_human_prob: 0.55      # antes 0.4 → leve aumento, sin ser explosivo
+  human_to_mosquito_prob: 0.33      # antes 0.25 → más infecciones de mosquitos
+  bite_rate: 0.65                   # antes 0.5 → más picaduras, pero no tan alto como 0.7             # antes 0.7 (~1 comida cada 2 días aprox.)
 
 mobility:
   student_daily_probabilities:
