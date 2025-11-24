@@ -5,7 +5,7 @@ simulation:
   num_humanos: 10000
   num_mosquitos: 1500
   num_huevos: 50
-  infectados_iniciales: 297  # Casos reales de dengue en 2021 (SIVIGILA Bucaramanga)
+  infectados_iniciales: 5  # Casos iniciales escalados (proporción ~1:2000)
   mosquitos_infectados_iniciales: 12
   usar_lsm: false
   usar_itn_irs: false
