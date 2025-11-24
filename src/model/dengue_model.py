@@ -114,12 +114,26 @@ class DengueModel(Model):
         self.climate_loader = None
         
         # Cargar configuración desde archivo si se proporciona
+        cfg_dict_from_file = {}
         if config_file:
-            cfg_dict = self._cargar_configuracion_archivo(config_file)
-            self._cargar_configuracion(cfg_dict)
-        # Cargar configuración desde diccionario si se proporciona
-        elif config:
-            self._cargar_configuracion(config)
+            cfg_dict_from_file = self._cargar_configuracion_archivo(config_file)
+        
+        # Combinar configuración de archivo con la pasada directamente
+        # La configuración pasada directamente tiene prioridad
+        final_config = cfg_dict_from_file
+        if config:
+            final_config.update(config)
+        
+        # IMPORTANTE: Cargar configuración de serotipos ANTES de crear agentes
+        serotypes = final_config.get('serotypes', {})
+        self.serotypes_enabled = serotypes.get('enabled', True)
+        self.num_serotypes = serotypes.get('num_serotypes', 4)
+        self.cross_immunity_duration = serotypes.get('cross_immunity_duration_days', 75)
+        self.initial_serotype_distribution = serotypes.get('initial_distribution', [0.25, 0.25, 0.25, 0.25])
+        
+        # Cargar el resto de la configuración
+        if final_config:
+            self._cargar_configuracion(final_config)
         else:
             self._cargar_configuracion_default()
         
@@ -237,6 +251,20 @@ class DengueModel(Model):
                 "Expuestos": lambda m: self._contar_humanos_estado(EstadoSalud.EXPUESTO),
                 "Infectados": lambda m: self._contar_humanos_estado(EstadoSalud.INFECTADO),
                 "Recuperados": lambda m: self._contar_humanos_estado(EstadoSalud.RECUPERADO),
+                
+                # Infectados por serotipo
+                "Infectados_S1": lambda m: self._contar_humanos_serotipo(1),
+                "Infectados_S2": lambda m: self._contar_humanos_serotipo(2),
+                "Infectados_S3": lambda m: self._contar_humanos_serotipo(3),
+                "Infectados_S4": lambda m: self._contar_humanos_serotipo(4),
+                
+                # Distribución de inmunidad (número de infecciones previas)
+                "Inmunes_0": lambda m: self._contar_inmunidad_distribucion()[0],  # Nunca infectados
+                "Inmunes_1": lambda m: self._contar_inmunidad_distribucion()[1],  # 1 infección previa
+                "Inmunes_2": lambda m: self._contar_inmunidad_distribucion()[2],  # 2 infecciones previas
+                "Inmunes_3": lambda m: self._contar_inmunidad_distribucion()[3],  # 3 infecciones previas
+                "Inmunes_4": lambda m: self._contar_inmunidad_distribucion()[4],  # 4 infecciones (completamente inmunes)
+                
                 "Mosquitos_S": lambda m: self._contar_mosquitos_estado(EstadoMosquito.SUSCEPTIBLE),
                 "Mosquitos_I": lambda m: self._contar_mosquitos_estado(EstadoMosquito.INFECTADO),
                 "Mosquitos_Total": lambda m: self._contar_mosquitos_adultos(),
@@ -256,6 +284,25 @@ class DengueModel(Model):
         
         # Recolectar estado inicial
         self.datacollector.collect(self)
+        
+        # Log de configuración de serotipos
+        if self.serotypes_enabled:
+            print(f"\n[SEROTIPOS] Configuración:")
+            print(f"  • Serotipos habilitados: {self.num_serotypes}")
+            print(f"  • Inmunidad cruzada: {self.cross_immunity_duration} días")
+            print(f"  • Distribución inicial: {self.initial_serotype_distribution}")
+            
+            # Contar infectados por serotipo
+            infectados_por_serotipo = {1: 0, 2: 0, 3: 0, 4: 0}
+            for agente in self.agents:
+                if hasattr(agente, 'serotipo_actual') and agente.serotipo_actual:
+                    infectados_por_serotipo[agente.serotipo_actual] = \
+                        infectados_por_serotipo.get(agente.serotipo_actual, 0) + 1
+            
+            print(f"\n[SEROTIPOS] Infectados iniciales por serotipo:")
+            for serotipo, count in sorted(infectados_por_serotipo.items()):
+                if count > 0:
+                    print(f"  • DENV-{serotipo}: {count} humanos")
         
         self.running = True
 
@@ -426,6 +473,8 @@ class DengueModel(Model):
         human_behavior = config.get('human_behavior', {})
         self.isolation_probability = human_behavior.get('isolation_probability', 0.7)
         self.infected_mobility_radius = human_behavior.get('infected_mobility_radius', 1)
+        
+        # Nota: Parámetros de serotipos ya cargados antes de crear agentes
         
         # Validar que las probabilidades de movilidad sumen 1.0 para cada tipo
         self._validar_probabilidades_movilidad()
@@ -630,6 +679,37 @@ class DengueModel(Model):
         
         # 7. Recolectar datos
         self.datacollector.collect(self)
+        
+        # Log de serotipos cada 10 días
+        if verbose and self.serotypes_enabled:
+            print(f"\n[SEROTIPOS] Estado día {self.dia_simulacion}:")
+            
+            # Infectados por serotipo
+            infectados_s = {1: 0, 2: 0, 3: 0, 4: 0}
+            for agente in self.agents:
+                if hasattr(agente, 'serotipo_actual') and agente.serotipo_actual:
+                    infectados_s[agente.serotipo_actual] += 1
+            
+            print(f"  Infectados por serotipo:")
+            for s in [1, 2, 3, 4]:
+                if infectados_s[s] > 0:
+                    print(f"    DENV-{s}: {infectados_s[s]}")
+            
+            # Distribución de inmunidad
+            inmunidad_dist = self._contar_inmunidad_distribucion()
+            print(f"  Distribución de inmunidad:")
+            print(f"    0 infecciones: {inmunidad_dist[0]}")
+            print(f"    1 infección: {inmunidad_dist[1]}")
+            print(f"    2 infecciones: {inmunidad_dist[2]}")
+            print(f"    3 infecciones: {inmunidad_dist[3]}")
+            print(f"    4 infecciones: {inmunidad_dist[4]} (completamente inmunes)")
+            
+            # Reinfecciones
+            reinfecciones = sum(1 for a in self.agents 
+                              if hasattr(a, 'historial_infecciones') and 
+                              len(a.historial_infecciones) > 1)
+            print(f"  Personas con reinfecciones: {reinfecciones}")
+
     
     def _actualizar_clima(self):
         """
@@ -1068,6 +1148,19 @@ class DengueModel(Model):
             # Asignar estado infectado a algunos
             if infectados_asignados < infectados_iniciales:
                 humano.estado = EstadoSalud.INFECTADO
+                
+                # Asignar serotipo según distribución configurada
+                if self.serotypes_enabled:
+                    rand_serotipo = self.random.random()
+                    acum_serotipo = 0
+                    for serotipo_idx, prob in enumerate(self.initial_serotype_distribution, start=1):
+                        acum_serotipo += prob
+                        if rand_serotipo < acum_serotipo:
+                            humano.serotipo_actual = serotipo_idx
+                            break
+                else:
+                    humano.serotipo_actual = 1  # Default a DENV-1 si serotipos deshabilitados
+                
                 infectados_asignados += 1
             
             # Colocar en grid y agregar a scheduler
@@ -1188,8 +1281,45 @@ class DengueModel(Model):
         return self.mosquito_pop.total_mosquitos()
     
     def _contar_huevos(self) -> int:
-        """Cuenta total de huevos usando EggManager."""
+        """Cuenta total de huevos."""
         return self.egg_manager.count_eggs()
+    
+    def _contar_humanos_serotipo(self, serotipo: int) -> int:
+        """
+        Cuenta humanos infectados con un serotipo específico.
+        
+        Parameters
+        ----------
+        serotipo : int
+            Serotipo a contar (1, 2, 3, o 4)
+            
+        Returns
+        -------
+        int
+            Número de humanos actualmente infectados con ese serotipo
+        """
+        return sum(1 for a in self.agents 
+                  if isinstance(a, HumanAgent) and 
+                  a.estado == EstadoSalud.INFECTADO and 
+                  a.serotipo_actual == serotipo)
+    
+    def _contar_inmunidad_distribucion(self) -> dict:
+        """
+        Cuenta distribución de inmunidad en la población.
+        
+        Returns
+        -------
+        dict
+            Diccionario {num_infecciones: count} donde num_infecciones es 0-4
+        """
+        distribucion = {0: 0, 1: 0, 2: 0, 3: 0, 4: 0}
+        
+        for agente in self.agents:
+            if isinstance(agente, HumanAgent):
+                num_inmunidades = len(agente.inmunidad_permanente)
+                distribucion[num_inmunidades] += 1
+        
+        return distribucion
     
     def __repr__(self) -> str:
         """Representación en cadena del modelo."""

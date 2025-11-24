@@ -89,6 +89,12 @@ class HumanAgent(Agent):
         self.estado = EstadoSalud.SUSCEPTIBLE
         self.dias_en_estado = 0
         
+        # Inmunidad por serotipo (DENV-1, DENV-2, DENV-3, DENV-4)
+        self.inmunidad_permanente = set()  # {1, 2, 3, 4} - serotipos con inmunidad permanente
+        self.inmunidad_cruzada = {}  # {serotipo: dias_restantes} - inmunidad temporal a otros serotipos
+        self.serotipo_actual = None  # Serotipo de infección actual (1-4), None si no infectado
+        self.historial_infecciones = []  # [(serotipo, dia_simulacion), ...] - historial de infecciones
+        
         # Movilidad
         self.tipo = tipo_movilidad
         self.pos_hogar = pos_hogar
@@ -104,6 +110,9 @@ class HumanAgent(Agent):
         self.incubation_period = model.incubation_period  # Ne = 5 días
         self.infectious_period = model.infectious_period  # Ni = 6 días
         self.infected_mobility_radius = model.infected_mobility_radius  # Radio restringido cuando infectado
+        
+        # Parámetros de inmunidad por serotipo
+        self.cross_immunity_duration = getattr(model, 'cross_immunity_duration', 75)  # Días de inmunidad cruzada (~2.5 meses)
         
         # Probabilidades diarias de ubicación por tipo (cacheadas)
         if tipo_movilidad == TipoMovilidad.ESTUDIANTE:
@@ -142,15 +151,33 @@ class HumanAgent(Agent):
 
     def actualizar_estado_seir(self):
         """
-        Actualiza el estado epidemiológico según el modelo SEIR.
+        Actualiza el estado epidemiológico según el modelo SEIR con serotipos.
         
         Transiciones:
         - S → E: Al ser picado por mosquito infectado (manejado en interacción)
-        - E → I: Después de duracion_expuesto días
-        - I → R: Después de duracion_infectado días
-        - R → S: Probabilidad Prc = 0 (inmunidad permanente en este modelo)
+        - E → I: Después de incubation_period días
+        - I → R: Después de infectious_period días
+        - R → S: Inmunidad permanente al serotipo específico, inmunidad cruzada temporal a otros
+        
+        Inmunidad por serotipo:
+        - Inmunidad permanente al serotipo que causó la infección
+        - Inmunidad cruzada temporal (~75 días) a los otros 3 serotipos
+        - Humano puede infectarse hasta 4 veces (una por cada serotipo)
         """
         self.dias_en_estado += 1
+        
+        # Decrementar inmunidad cruzada diariamente
+        serotipos_expirados = []
+        for serotipo, dias_restantes in self.inmunidad_cruzada.items():
+            dias_restantes -= 1
+            if dias_restantes <= 0:
+                serotipos_expirados.append(serotipo)
+            else:
+                self.inmunidad_cruzada[serotipo] = dias_restantes
+        
+        # Eliminar inmunidades cruzadas expiradas
+        for serotipo in serotipos_expirados:
+            del self.inmunidad_cruzada[serotipo]
         
         if self.estado == EstadoSalud.EXPUESTO:
             if self.dias_en_estado >= self.incubation_period:
@@ -161,21 +188,56 @@ class HumanAgent(Agent):
             if self.dias_en_estado >= self.infectious_period:
                 self.estado = EstadoSalud.RECUPERADO
                 self.dias_en_estado = 0
+                
+                # Agregar inmunidad permanente al serotipo actual
+                if self.serotipo_actual is not None:
+                    self.inmunidad_permanente.add(self.serotipo_actual)
+                    
+                    # Registrar infección en historial
+                    dia_actual = self.model.dia_simulacion if hasattr(self.model, 'dia_simulacion') else 0
+                    self.historial_infecciones.append((self.serotipo_actual, dia_actual))
+                    
+                    # Activar inmunidad cruzada temporal a los otros serotipos
+                    for serotipo in [1, 2, 3, 4]:
+                        if serotipo != self.serotipo_actual and serotipo not in self.inmunidad_permanente:
+                            self.inmunidad_cruzada[serotipo] = self.cross_immunity_duration
+                    
+                    # Resetear serotipo actual
+                    self.serotipo_actual = None
+                
                 # Resetear flag de aislamiento para futuras reinfecciones
                 if hasattr(self, '_aislamiento_decidido'):
                     self._aislamiento_decidido = False
     
-    def get_exposed(self):
+    def get_exposed(self, serotipo: int = 1):
         """
-        Transición S → E al ser picado por mosquito infectado.
+        Transición S → E al ser picado por mosquito infectado con un serotipo específico.
         
-        Solo aplicable si el humano está en estado Susceptible.
-        La probabilidad de transmisión α = 0.6 se maneja en la interacción.
+        Solo aplicable si el humano está en estado Susceptible o Recuperado
+        y no tiene inmunidad al serotipo específico.
+        
+        Parameters
+        ----------
+        serotipo : int, default=1
+            Serotipo del virus (1, 2, 3, o 4) que causa la infección
         """
-        if self.estado == EstadoSalud.SUSCEPTIBLE:
-            self.estado = EstadoSalud.EXPUESTO
-            self.dias_en_estado = 0
-            self.num_picaduras += 1
+        # Verificar que no esté actualmente infectado o expuesto
+        if self.estado not in [EstadoSalud.SUSCEPTIBLE, EstadoSalud.RECUPERADO]:
+            return
+        
+        # Verificar inmunidad permanente al serotipo
+        if serotipo in self.inmunidad_permanente:
+            return
+        
+        # Verificar inmunidad cruzada temporal al serotipo
+        if serotipo in self.inmunidad_cruzada:
+            return
+        
+        # Permitir exposición
+        self.estado = EstadoSalud.EXPUESTO
+        self.dias_en_estado = 0
+        self.serotipo_actual = serotipo
+        self.num_picaduras += 1
     
     def es_infeccioso(self) -> bool:
         """
@@ -188,16 +250,43 @@ class HumanAgent(Agent):
         """
         return self.estado == EstadoSalud.INFECTADO
     
-    def es_susceptible(self) -> bool:
+    def es_susceptible(self, serotipo: Optional[int] = None) -> bool:
         """
         Indica si el humano puede ser infectado.
+        
+        Parameters
+        ----------
+        serotipo : Optional[int], default=None
+            Si se especifica, verifica susceptibilidad al serotipo específico (1-4).
+            Si es None, verifica si puede infectarse con algún serotipo.
         
         Returns
         -------
         bool
-            True si está en estado Susceptible (S), False en caso contrario
+            True si está susceptible (al serotipo específico o a alguno), False en caso contrario
         """
-        return self.estado == EstadoSalud.SUSCEPTIBLE
+        # Debe estar en estado S o R para poder reinfectarse
+        if self.estado not in [EstadoSalud.SUSCEPTIBLE, EstadoSalud.RECUPERADO]:
+            return False
+        
+        # Si no se especifica serotipo, verificar si puede infectarse con alguno
+        if serotipo is None:
+            # Susceptible si no tiene inmunidad permanente a los 4 serotipos
+            if len(self.inmunidad_permanente) >= 4:
+                return False
+            # Verificar si hay al menos un serotipo sin inmunidad
+            for s in [1, 2, 3, 4]:
+                if s not in self.inmunidad_permanente and s not in self.inmunidad_cruzada:
+                    return True
+            return False
+        
+        # Verificar susceptibilidad al serotipo específico
+        if serotipo in self.inmunidad_permanente:
+            return False
+        if serotipo in self.inmunidad_cruzada:
+            return False
+        
+        return True
     
     def ejecutar_movilidad_diaria(self):
         """

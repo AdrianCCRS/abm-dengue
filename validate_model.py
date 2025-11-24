@@ -200,6 +200,9 @@ def plot_comparison(real_data, simulations_data, output_path):
     
     colors = plt.cm.tab10(np.linspace(0, 1, len(simulations_data)))
     for (name, df), color in zip(simulations_data.items(), colors):
+        # Crear columna 'dia' desde el índice si no existe
+        if 'dia' not in df.columns:
+            df['dia'] = df.index
         # Agrupar por semana
         df['semana'] = (df['dia'] // 7) + 1
         casos_semana = df.groupby('semana')['infectados'].mean()
@@ -216,6 +219,8 @@ def plot_comparison(real_data, simulations_data, output_path):
     ax.plot(real_data['dia'], real_data['casos_acumulados'], 'ko-', linewidth=2, markersize=4, label='Datos Reales 2022', zorder=10)
     
     for (name, df), color in zip(simulations_data.items(), colors):
+        if 'dia' not in df.columns:
+            df['dia'] = df.index
         df['casos_acumulados'] = df['infectados'].cumsum()
         ax.plot(df['dia'], df['casos_acumulados'], '-', color=color, alpha=0.7, linewidth=1.5, label=name)
     
@@ -228,6 +233,8 @@ def plot_comparison(real_data, simulations_data, output_path):
     # 3. Dinámica de mosquitos (solo simulaciones)
     ax = axes[1, 0]
     for (name, df), color in zip(simulations_data.items(), colors):
+        if 'dia' not in df.columns:
+            df['dia'] = df.index
         ax.plot(df['dia'], df['mosquitos_adultos'], '-', color=color, alpha=0.7, linewidth=1.5, label=name)
     
     ax.set_xlabel('Día del Año')
@@ -243,6 +250,8 @@ def plot_comparison(real_data, simulations_data, output_path):
     
     for name, df in simulations_data.items():
         # Calcular RMSE y correlación
+        if 'dia' not in df.columns:
+            df['dia'] = df.index
         df['semana'] = (df['dia'] // 7) + 1
         casos_semana_sim = df.groupby('semana')['infectados'].mean()
         

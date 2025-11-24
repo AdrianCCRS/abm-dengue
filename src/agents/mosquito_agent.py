@@ -90,6 +90,7 @@ class MosquitoAgent(Agent):
         
         # Estado epidemiológico
         self.estado = EstadoMosquito.SUSCEPTIBLE
+        self.serotipo = None  # Serotipo que porta el mosquito (1-4), None si susceptible
         
         # Ciclo de vida
         self.etapa = etapa
@@ -342,12 +343,16 @@ class MosquitoAgent(Agent):
         Intenta picar a un humano en la misma celda.
         
         Puede resultar en:
-        - Transmisión mosquito → humano (si mosquito infectado, humano susceptible)
+        - Transmisión mosquito → humano (si mosquito infectado, humano susceptible al serotipo)
         - Transmisión humano → mosquito (si mosquito susceptible, humano infectado)
         
         Probabilidades desde configuración del modelo:
         - α (mosquito → humano): mosquito_to_human_prob (por defecto 0.6)
         - β (humano → mosquito): human_to_mosquito_prob (por defecto 0.275)
+        
+        Serotipos:
+        - Mosquito infectado transmite su serotipo específico al humano
+        - Mosquito susceptible adquiere el serotipo del humano infectado
         """
         if self.ha_picado_hoy:
             return
@@ -373,14 +378,18 @@ class MosquitoAgent(Agent):
         beta = self.human_to_mosquito_prob  # β
         
         # Transmisión mosquito → humano (α)
-        if self.estado == EstadoMosquito.INFECTADO and humano.es_susceptible():
-            if self.random.random() < alpha:
-                humano.get_exposed()
+        if self.estado == EstadoMosquito.INFECTADO and self.serotipo is not None:
+            # Verificar si el humano es susceptible al serotipo específico
+            if humano.es_susceptible(serotipo=self.serotipo):
+                if self.random.random() < alpha:
+                    humano.get_exposed(serotipo=self.serotipo)
         
         # Transmisión humano → mosquito (β)
         elif self.estado == EstadoMosquito.SUSCEPTIBLE and humano.es_infeccioso():
             if self.random.random() < beta:
                 self.estado = EstadoMosquito.INFECTADO
+                # Adquirir el serotipo del humano infectado
+                self.serotipo = humano.serotipo_actual
     
     def intentar_apareamiento(self):
         """

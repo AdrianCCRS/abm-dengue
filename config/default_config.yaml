@@ -4,7 +4,7 @@ simulation:
   height: 150
   num_humanos: 7000
   num_mosquitos: 1500
-  num_huevos: 50
+  num_huevos: 500
   infectados_iniciales: 20
   mosquitos_infectados_iniciales: 12
   usar_lsm: false
@@ -22,8 +22,8 @@ mosquito_disease:
   carrying_capacity_per_cell: 3000  # antes 10000 → más acorde con docstring del grid
 
 transmission:
-  mosquito_to_human_prob: 0.6   # α = 0.6 - Competencia vectorial alta de Ae. aegypti
-  human_to_mosquito_prob: 0.275     # antes 0.25 → más infecciones de mosquitos
+  mosquito_to_human_prob: 0.65      # antes 0.4 → leve aumento, sin ser explosivo
+  human_to_mosquito_prob: 0.33      # antes 0.25 → más infecciones de mosquitos
   bite_rate: 0.65                   # antes 0.5 → más picaduras, pero no tan alto como 0.7             # antes 0.7 (~1 comida cada 2 días aprox.)
 
 mobility:
@@ -60,9 +60,9 @@ mosquito_breeding:
 
   breeding_site_ratio: 0.15    # antes 0.10 → más sitios permanentes, pero menos que 0.20
 
-  gonotrophic_cycle_days: 4    # antes 5 → ponen huevos un poco más frecuente
+  gonotrophic_cycle_days: 3    # antes 5 → ponen huevos un poco más frecuente
 
-  egg_mortality_rate: 0.28     # antes 0.35 → menos mortalidad, pero más que el 0.25 inicial
+  egg_mortality_rate: 0.20     # antes 0.35 → menos mortalidad, pero más que el 0.25 inicial
 
   temporary_sites:
     min_rainfall: 5.0
@@ -105,3 +105,9 @@ control:
 human_behavior:
   isolation_probability: 0.3     # antes 0.7
   infected_mobility_radius: 1
+
+serotypes:
+  enabled: true
+  num_serotypes: 4
+  cross_immunity_duration_days: 75  # ~2.5 meses de inmunidad cruzada temporal
+  initial_distribution: [0.25, 0.25, 0.25, 0.25]  # DENV-1, DENV-2, DENV-3, DENV-4
