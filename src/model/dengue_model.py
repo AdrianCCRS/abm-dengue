@@ -714,10 +714,6 @@ class DengueModel(Model):
                 else:
                     charcos_nuevos += 1
                 self.sitios_cria_temporales[pos] = self.temp_site_duration_days
-            
-            if charcos_nuevos > 0 or charcos_renovados > 0:
-                print(f"[CHARCOS] Lluvia {self.precipitacion_actual:.1f}mm: "
-                      f"+{charcos_nuevos} nuevos, {charcos_renovados} renovados")
         
         # 2. Decrementar días restantes y eliminar charcos secos
         sitios_a_eliminar = []
@@ -734,10 +730,6 @@ class DengueModel(Model):
         
         charcos_despues = len(self.sitios_cria_temporales)
         charcos_eliminados = len(sitios_a_eliminar)
-        
-        # Log si hubo cambios significativos
-        if charcos_eliminados > 0:
-            print(f"[CHARCOS] Eliminados {charcos_eliminados} charcos secos (quedan {charcos_despues})")
     
     def _aplicar_control(self):
         """
