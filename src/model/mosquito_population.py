@@ -557,6 +557,9 @@ class MosquitoPopulationGrid:
         total_eggs = eggs_from_S + eggs_from_E + eggs_from_I
         
         if total_eggs > 0:
+            # Log de transmisión vertical (cada 10 días y si hay huevos infectados)
+            if infected_eggs > 0 and model.dia_simulacion % 10 == 0:
+                print(f"[REPROD DIA {model.dia_simulacion}] Celda ({x},{y}): {total_eggs} huevos ({infected_eggs} infectados) de {reproducing_E}E+{reproducing_I}I hembras", flush=True)
             # Agregar huevos al sitio de cría (celda actual)
             model.egg_manager.add_eggs((x, y), total_eggs, infected_eggs)
     
