@@ -524,6 +524,10 @@ class MosquitoPopulationGrid:
         
         total_females = S_females + E_females + I_females
         
+        # DEBUG: Log hembras infectadas encontradas
+        if E_females > 0 or I_females > 0:
+            print(f"[DEBUG-HEMBRAS DIA {model.dia_simulacion}] Celda ({x},{y}): {E_females}E + {I_females}I hembras", flush=True)
+        
         if total_females == 0:
             return
         
@@ -560,6 +564,9 @@ class MosquitoPopulationGrid:
             # Log de transmisión vertical (SIEMPRE si hay infectados para debug)
             if infected_eggs > 0:
                 print(f"[REPROD DIA {model.dia_simulacion}] Celda ({x},{y}): {total_eggs} huevos ({infected_eggs} infectados) de {reproducing_E}E+{reproducing_I}I hembras", flush=True)
+            elif (E_females > 0 or I_females > 0) and model.dia_simulacion % 10 == 0:
+                # Había hembras infectadas pero no se reprodujeron o no transmitieron
+                print(f"[REPROD-FALLO DIA {model.dia_simulacion}] Celda ({x},{y}): {total_eggs} huevos (0 infectados) con {E_females}E+{I_females}I hembras disponibles", flush=True)
             # Agregar huevos al sitio de cría (celda actual)
             model.egg_manager.add_eggs((x, y), total_eggs, infected_eggs)
     
