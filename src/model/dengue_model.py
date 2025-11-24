@@ -441,6 +441,20 @@ class DengueModel(Model):
         self.isolation_probability = human_behavior.get('isolation_probability', 0.7)
         self.infected_mobility_radius = human_behavior.get('infected_mobility_radius', 1)
         
+        # Parámetros de efectos climáticos
+        climate_effects = config.get('climate_effects', {})
+        self.temp_optimal_min = climate_effects.get('temperature_optimal_min', 25)
+        self.temp_optimal_max = climate_effects.get('temperature_optimal_max', 30)
+        self.temp_extreme_cold = climate_effects.get('temperature_extreme_cold', 10)
+        self.temp_extreme_heat = climate_effects.get('temperature_extreme_heat', 40)
+        self.temp_suboptimal_cold = climate_effects.get('temperature_suboptimal_cold', 15)
+        self.temp_suboptimal_heat = climate_effects.get('temperature_suboptimal_heat', 35)
+        self.mosquito_mortality_extreme_mult = climate_effects.get('mosquito_mortality_extreme_multiplier', 2.5)
+        self.mosquito_mortality_suboptimal_mult = climate_effects.get('mosquito_mortality_suboptimal_multiplier', 1.5)
+        self.egg_mortality_extreme_cold = climate_effects.get('egg_mortality_extreme_cold', 0.90)
+        self.egg_mortality_extreme_heat = climate_effects.get('egg_mortality_extreme_heat', 0.80)
+        self.egg_mortality_suboptimal = climate_effects.get('egg_mortality_suboptimal', 0.50)
+        
         # Validar que las probabilidades de movilidad sumen 1.0 para cada tipo
         self._validar_probabilidades_movilidad()
     
@@ -609,6 +623,9 @@ class DengueModel(Model):
         # 3.1. Aplicar mortalidad de huevos (si está configurada)
         if self.egg_mortality_rate > 0:
             self.egg_manager.apply_mortality(self.egg_mortality_rate)
+        
+        # 3.2. Aplicar mortalidad de huevos por temperatura
+        self.egg_manager.apply_temperature_mortality()
          
         # 4. Procesar mosquitos (modelo metapoblacional - RÁPIDO)
         self.mosquito_pop.step(self)

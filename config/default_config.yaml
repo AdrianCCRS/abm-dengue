@@ -5,7 +5,7 @@ simulation:
   num_humanos: 10000
   num_mosquitos: 1500
   num_huevos: 50
-  infectados_iniciales: 20
+  infectados_iniciales: 297  # Casos reales de dengue en 2021 (SIVIGILA Bucaramanga)
   mosquitos_infectados_iniciales: 12
   usar_lsm: false
   usar_itn_irs: false
@@ -105,3 +105,21 @@ control:
 human_behavior:
   isolation_probability: 0.3     # antes 0.7
   infected_mobility_radius: 1
+
+climate_effects:
+  # Rangos de temperatura
+  temperature_optimal_min: 25°C
+  temperature_optimal_max: 30°C
+  temperature_extreme_cold: 10°C
+  temperature_extreme_heat: 40°C
+  temperature_suboptimal_cold: 15°C
+  temperature_suboptimal_heat: 35°C
+  
+  # Multiplicadores de mortalidad
+  mosquito_mortality_extreme_multiplier: 2.5
+  mosquito_mortality_suboptimal_multiplier: 1.5
+  
+  # Mortalidad de huevos
+  egg_mortality_extreme_cold: 0.90  # 90%
+  egg_mortality_extreme_heat: 0.80  # 80%
+  egg_mortality_suboptimal: 0.50    # 50%

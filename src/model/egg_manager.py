@@ -332,6 +332,71 @@ class EggManager:
         for batch in batches_to_remove:
             self.egg_batches.remove(batch)
     
+    def apply_temperature_mortality(self):
+        """
+        Aplica mortalidad adicional a los huevos según la temperatura.
+        
+        La mortalidad se ajusta según la temperatura:
+        - T < 10°C: 90% de huevos mueren (frío extremo)
+        - T > 40°C: 80% de huevos mueren (calor extremo)
+        - 10°C < T < 15°C o 35°C < T < 40°C: 50% mueren (subóptimo)
+        - 15°C <= T <= 35°C: Mortalidad base normal
+        
+        Se llama en cada paso de simulación después de la mortalidad base.
+        """
+        temperatura = self.model.temperatura_actual
+        
+        # Determinar tasa de mortalidad adicional según temperatura
+        if temperatura < self.model.temp_extreme_cold:
+            # Frío extremo (< 10°C)
+            mortality_rate = self.model.egg_mortality_extreme_cold
+        elif temperatura > self.model.temp_extreme_heat:
+            # Calor extremo (> 40°C)
+            mortality_rate = self.model.egg_mortality_extreme_heat
+        elif temperatura < self.model.temp_suboptimal_cold or temperatura > self.model.temp_suboptimal_heat:
+            # Subóptimo (10-15°C o 35-40°C)
+            mortality_rate = self.model.egg_mortality_suboptimal
+        else:
+            # Temperatura óptima (15-35°C) - sin mortalidad adicional
+            return
+        
+        # Aplicar mortalidad por temperatura
+        batches_to_remove = []
+        
+        for batch in self.egg_batches:
+            # Calcular muertes (redondeo estocástico)
+            muertes_esperadas = batch.cantidad * mortality_rate
+            muertes = int(muertes_esperadas)
+            
+            # Probabilidad de muerte adicional (parte fraccionaria)
+            if self.model.random.random() < (muertes_esperadas - muertes):
+                muertes += 1
+            
+            # Calcular muertes entre infectados (proporcional)
+            if batch.cantidad > 0:
+                proporcion_infectados = batch.cantidad_infectados / batch.cantidad
+                muertes_infectados = int(muertes * proporcion_infectados)
+                
+                # Redondeo estocástico para infectados
+                muertes_inf_esperadas = muertes * proporcion_infectados
+                if self.model.random.random() < (muertes_inf_esperadas - muertes_infectados):
+                    muertes_infectados += 1
+                
+                batch.cantidad_infectados = max(0, batch.cantidad_infectados - muertes_infectados)
+            
+            batch.cantidad -= muertes
+            
+            # Asegurar consistencia
+            batch.cantidad_infectados = min(batch.cantidad_infectados, batch.cantidad)
+            
+            # Marcar para eliminación si no quedan huevos
+            if batch.cantidad <= 0:
+                batches_to_remove.append(batch)
+        
+        # Eliminar lotes vacíos
+        for batch in batches_to_remove:
+            self.egg_batches.remove(batch)
+    
     def apply_lsm_control(self, coverage: float, effectiveness: float):
         """
         Aplica control larvario (LSM) a los lotes de huevos.
