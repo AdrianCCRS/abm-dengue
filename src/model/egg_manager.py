@@ -118,11 +118,6 @@ class EggManager:
         # Validar que infectados no exceda total
         cantidad_infectados = min(cantidad_infectados, cantidad)
         
-        # Log si se agregan huevos infectados (transmisión vertical activa)
-        if cantidad_infectados > 0:
-            pct = (cantidad_infectados / cantidad * 100) if cantidad > 0 else 0
-            print(f"[HUEVOS-INF] +{cantidad_infectados}/{cantidad} huevos infectados ({pct:.1f}%) en {sitio_cria}")
-        
         # Buscar lote existente en el mismo sitio y mismo día
         dia_actual = self.model.dia_simulacion
         for batch in self.egg_batches:
@@ -198,12 +193,6 @@ class EggManager:
         batch : EggBatch
             Lote de huevos a eclosionar
         """
-        # Log de eclosión
-        if batch.cantidad_infectados > 0:
-            pct = (batch.cantidad_infectados / batch.cantidad * 100) if batch.cantidad > 0 else 0
-            print(f"[ECLOSIÓN] {batch.cantidad} huevos → mosquitos "
-                  f"({batch.cantidad_infectados} infectados, {pct:.1f}%) en {batch.sitio_cria}")
-        
         # Agregar mosquitos al grid de poblaciones (modelo metapoblacional)
         if hasattr(self.model, 'mosquito_pop'):
             from .mosquito_population import MosquitoState
