@@ -209,8 +209,6 @@ class EggManager:
             # Mosquitos infectados por transmisión vertical
             # Nacen directamente como INFECCIOSOS (pueden transmitir inmediatamente)
             if batch.cantidad_infectados > 0:
-                # Log SIEMPRE para debug (eliminar después)
-                print(f"[ECLOSION DIA {self.model.dia_simulacion}] Naciendo {batch.cantidad_infectados} mosquitos INFECTADOS en {batch.sitio_cria}", flush=True)
                 self.model.mosquito_pop.add_mosquitos(
                     batch.sitio_cria, 
                     batch.cantidad_infectados,

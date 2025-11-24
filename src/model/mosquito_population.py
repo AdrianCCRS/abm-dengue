@@ -286,6 +286,32 @@ class MosquitoPopulationGrid:
         self.E_m[x, y] -= transitions
         self.I_m[x, y] += transitions
     
+    def _stochastic_round(self, value: float) -> int:
+        """
+        Redondeo estocástico: redondea al entero más cercano probabilísticamente.
+        
+        Ejemplo: 2.7 → 70% probabilidad de 3, 30% de 2
+        
+        Esto es CRÍTICO para poblaciones pequeñas donde int() truncaría
+        a cero y perdería individuos (ej: 1 mosquito * 0.52 = 0.52 → 0 con int())
+        
+        Parameters
+        ----------
+        value : float
+            Valor a redondear
+            
+        Returns
+        -------
+        int
+            Valor redondeado estocásticamente
+        """
+        import numpy as np
+        base = int(value)
+        remainder = value - base
+        if np.random.random() < remainder:
+            return base + 1
+        return base
+    
     def _safe_binomial(self, n: int, p: float) -> int:
         """
         Muestreo binomial seguro que maneja poblaciones grandes.
@@ -518,15 +544,13 @@ class MosquitoPopulationGrid:
         vertical_transmission_rate = getattr(model, 'vertical_transmission_rate', 0.05)
         
         # Hembras por estado epidemiológico
-        S_females = int(self.S_m[x, y] * female_ratio)
-        E_females = int(self.E_m[x, y] * female_ratio)
-        I_females = int(self.I_m[x, y] * female_ratio)
+        # USAR REDONDEO ESTOCÁSTICO en lugar de truncamiento
+        # Esto es crítico para poblaciones pequeñas de infectados
+        S_females = self._stochastic_round(self.S_m[x, y] * female_ratio)
+        E_females = self._stochastic_round(self.E_m[x, y] * female_ratio)
+        I_females = self._stochastic_round(self.I_m[x, y] * female_ratio)
         
         total_females = S_females + E_females + I_females
-        
-        # DEBUG: Log hembras infectadas encontradas
-        if E_females > 0 or I_females > 0:
-            print(f"[DEBUG-HEMBRAS DIA {model.dia_simulacion}] Celda ({x},{y}): {E_females}E + {I_females}I hembras", flush=True)
         
         if total_females == 0:
             return
@@ -561,12 +585,6 @@ class MosquitoPopulationGrid:
         total_eggs = eggs_from_S + eggs_from_E + eggs_from_I
         
         if total_eggs > 0:
-            # Log de transmisión vertical (SIEMPRE si hay infectados para debug)
-            if infected_eggs > 0:
-                print(f"[REPROD DIA {model.dia_simulacion}] Celda ({x},{y}): {total_eggs} huevos ({infected_eggs} infectados) de {reproducing_E}E+{reproducing_I}I hembras", flush=True)
-            elif (E_females > 0 or I_females > 0) and model.dia_simulacion % 10 == 0:
-                # Había hembras infectadas pero no se reprodujeron o no transmitieron
-                print(f"[REPROD-FALLO DIA {model.dia_simulacion}] Celda ({x},{y}): {total_eggs} huevos (0 infectados) con {E_females}E+{I_females}I hembras disponibles", flush=True)
             # Agregar huevos al sitio de cría (celda actual)
             model.egg_manager.add_eggs((x, y), total_eggs, infected_eggs)
     
