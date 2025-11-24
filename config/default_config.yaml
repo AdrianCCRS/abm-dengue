@@ -107,13 +107,13 @@ human_behavior:
   infected_mobility_radius: 1
 
 climate_effects:
-  # Rangos de temperatura
-  temperature_optimal_min: 25°C
-  temperature_optimal_max: 30°C
-  temperature_extreme_cold: 10°C
-  temperature_extreme_heat: 40°C
-  temperature_suboptimal_cold: 15°C
-  temperature_suboptimal_heat: 35°C
+  # Rangos de temperatura (°C)
+  temperature_optimal_min: 25
+  temperature_optimal_max: 30
+  temperature_extreme_cold: 10
+  temperature_extreme_heat: 40
+  temperature_suboptimal_cold: 15
+  temperature_suboptimal_heat: 35
   
   # Multiplicadores de mortalidad
   mosquito_mortality_extreme_multiplier: 2.5
