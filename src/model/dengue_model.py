@@ -690,6 +690,10 @@ class DengueModel(Model):
         - temp_site_duration_days: días que persiste un charco (7)
         - temp_site_max_sites: límite máximo de charcos simultáneos (100)
         """
+        charcos_antes = len(self.sitios_cria_temporales)
+        charcos_renovados = 0
+        charcos_nuevos = 0
+        
         # 1. Crear nuevos charcos si hay suficiente lluvia
         if self.precipitacion_actual >= self.temp_site_min_rainfall:
             # Calcular número de charcos a crear
@@ -704,7 +708,15 @@ class DengueModel(Model):
                 pos = (self.random.randrange(self.width),
                       self.random.randrange(self.height))
                 # Reiniciar duración si el sitio ya existe (lluvia renueva charco)
+                if pos in self.sitios_cria_temporales:
+                    charcos_renovados += 1
+                else:
+                    charcos_nuevos += 1
                 self.sitios_cria_temporales[pos] = self.temp_site_duration_days
+            
+            if charcos_nuevos > 0 or charcos_renovados > 0:
+                print(f"[CHARCOS] Lluvia {self.precipitacion_actual:.1f}mm: "
+                      f"+{charcos_nuevos} nuevos, {charcos_renovados} renovados")
         
         # 2. Decrementar días restantes y eliminar charcos secos
         sitios_a_eliminar = []
@@ -718,6 +730,13 @@ class DengueModel(Model):
         # 3. Eliminar charcos secos
         for pos in sitios_a_eliminar:
             del self.sitios_cria_temporales[pos]
+        
+        charcos_despues = len(self.sitios_cria_temporales)
+        charcos_eliminados = len(sitios_a_eliminar)
+        
+        # Log si hubo cambios significativos
+        if charcos_eliminados > 0:
+            print(f"[CHARCOS] Eliminados {charcos_eliminados} charcos secos (quedan {charcos_despues})")
     
     def _aplicar_control(self):
         """

@@ -2,7 +2,7 @@ simulation:
   steps: 364
   width: 150
   height: 150
-  num_humanos: 7000
+  num_humanos: 10000
   num_mosquitos: 1500
   num_huevos: 50
   infectados_iniciales: 20
@@ -51,8 +51,8 @@ mobility:
     random: 0.0
 
 mosquito_breeding:
-  eggs_per_female: 50          # SEGÚN DOCUMENTO: 50 huevos/hembra/ciclo
-  mating_probability: 0.7       # AUMENTADO: más hembras se aparean
+  eggs_per_female: 35          # SEGÚN DOCUMENTO: 50 huevos/hembra/ciclo
+  mating_probability: 0.6       # AUMENTADO: más hembras se aparean
   female_ratio: 0.52
   immature_development_threshold: 8.3
   immature_thermal_constant: 181.2
