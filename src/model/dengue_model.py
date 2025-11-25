@@ -177,6 +177,7 @@ class DengueModel(Model):
         self.usar_itn_irs = usar_itn_irs
         self.lsm_activo = False
         self.itn_irs_activo = False
+        self.itn_irs_dias_desde_aplicacion = None  # Contador de días desde aplicación ITN/IRS
         
         # Sitios de cría temporales (charcos post-lluvia)
         # Diccionario: {posicion: dias_restantes}
@@ -656,7 +657,7 @@ class DengueModel(Model):
         self.mosquito_pop.step(self)
         
         # 5. Aplicar estrategias de control
-        #self._aplicar_control()
+        self._aplicar_control()
         
         # 6. Activar agentes humanos (solo humanos, no mosquitos)
         # OPTIMIZACIÓN: Solo log cada 10 días para reducir overhead de I/O
@@ -820,9 +821,17 @@ class DengueModel(Model):
         if self.usar_lsm and self.dia_simulacion % self.lsm_frequency_days == 0:
             self._aplicar_lsm()
         
-        # ITN/IRS: Activar según necesidad
+        # ITN/IRS: Gestionar duración de la intervención
         if self.usar_itn_irs:
-            self._aplicar_itn_irs()
+            # Si no se ha aplicado aún, aplicar al inicio
+            if self.itn_irs_dias_desde_aplicacion is None:
+                self._aplicar_itn_irs()
+            elif self.itn_irs_dias_desde_aplicacion >= self.itn_irs_duration_days:
+                # Desactivar ITN/IRS cuando se alcanza o supera la duración
+                self.itn_irs_activo = False
+            else:
+                # Incrementar días desde aplicación
+                self.itn_irs_dias_desde_aplicacion += 1
     
     def _aplicar_lsm(self):
         """
@@ -843,11 +852,14 @@ class DengueModel(Model):
         """
         Aplica protección con redes/insecticidas (ITN/IRS).
         
-        Reduce probabilidad de picadura en 70% para 60% de humanos.
-        NOTA: La reducción se aplica directamente en la interacción mosquito-humano.
+        Reduce probabilidad de picadura y aumenta mortalidad de mosquitos.
+        La protección dura itn_irs_duration_days (por defecto 90 días).
+        
+        NOTA: La reducción se aplica directamente en:
+        - MosquitoPopulationGrid: mortalidad y tasa de picadura
         """
         self.itn_irs_activo = True
-        # La lógica de reducción se implementa en MosquitoAgent.intentar_picar()
+        self.itn_irs_dias_desde_aplicacion = 1  # Inicia en 1 (día de aplicación)
     
     def _inicializar_mapa_celdas(self) -> Dict[Tuple[int, int], 'Celda']:
         """

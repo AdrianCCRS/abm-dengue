@@ -10,7 +10,7 @@ simulation:
   infectados_iniciales: 2       # Pocos casos iniciales humanos
   mosquitos_infectados_iniciales: 3000  # Alto reservorio viral en mosquitos
   usar_lsm: false
-  usar_itn_irs: false
+  usar_itn_irs: true
   seed: null
   fecha_inicio: "2022-01-01"
 

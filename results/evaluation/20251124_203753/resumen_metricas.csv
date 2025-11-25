@@ -1,5 +1,0 @@
-Escenario,Pico_Infectados,Dia_Pico,Mosquitos_Final,Mosquitos_Infectados_Final,Reduccion_Pico_%
-1. Baseline (Sin Control),6,11,1352890,254,0.0
-2. Solo LSM,6,11,1352890,254,0.0
-3. Solo ITN/IRS,6,11,1352890,254,0.0
-4. Combinado (LSM + ITN/IRS),6,11,1352890,254,0.0
