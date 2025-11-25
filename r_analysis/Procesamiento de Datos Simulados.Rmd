@@ -1,0 +1,387 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# Datos Simulados (Modelo Meta-poblacional) 
+
+```{r}
+# Análisis comparativo de runs (R)
+# Requisitos: tidyverse, lubridate
+# Instala si hace falta: install.packages(c("tidyverse","lubridate"))
+
+library(tidyverse)
+library(lubridate)
+
+# ------- CONFIG --------
+data_dir <- "resultados"        # carpeta con los 16 CSV (modifica si hace falta)
+file_pattern <- "\\.csv$" # patrón para leer archivos
+out_dir <- "results"     # donde guardar figuras y tablas
+dir.create(out_dir, showWarnings = FALSE)
+
+# ------- CARGAR Y UNIFICAR CSVs -------
+files <- list.files(data_dir, pattern = file_pattern, full.names = TRUE)
+
+read_run <- function(path) {
+  df <- read_csv(path, show_col_types = FALSE)
+  # intentar extraer run_id/estrategia desde nombre de archivo si faltan:
+  basename <- basename(path)
+  if (!"run_id" %in% names(df)) {
+    # intenta extraer número de run: any dígitos en el nombre
+    run_id_from_name <- str_extract(basename, "\\d+")
+    if (!is.na(run_id_from_name)) df$run_id <- as.integer(run_id_from_name)
+  }
+  if (!"estrategia" %in% names(df)) {
+    # intenta extraer palabra clave (ej "sin_control") del nombre
+    m <- str_extract(basename, "(sin_control|control|itn|irs|lsm|otrastrategias|estrategia_[^_\\.]+)")
+    if (!is.na(m)) df$estrategia <- m
+  }
+  # añadir columna source_file para trazar si se necesita
+  df$source_file <- basename
+  # si no hay columna day, crearla por posición
+  if (!"day" %in% names(df)) df <- df %>% mutate(day = row_number())
+  # si hay más de 365 filas -> asignar year por bloques de 365
+  df <- df %>% mutate(year = ceiling(day / 365))
+  # convertir columnas lógicas si vienen como text
+  if ("LSM_Activo" %in% names(df)) df <- df %>% mutate(LSM_Activo = as.logical(LSM_Activo))
+  if ("ITN_IRS_Activo" %in% names(df)) df <- df %>% mutate(ITN_IRS_Activo = as.logical(ITN_IRS_Activo))
+  return(df)
+}
+
+all_runs <- map_dfr(files, read_run)
+
+# Asegurarse de tipos
+all_runs <- all_runs %>%
+  mutate(
+    estrategia = if_else(is.na(estrategia), "sin_especificar", as.character(estrategia)),
+    run_id = if_else(is.na(run_id), paste0("file_", row_number()), as.character(run_id)),
+    year = as.integer(year),
+    day = as.integer(day)
+  )
+
+# ------- GENERAR METRICAS POR RUN-YEAR -------
+# métricas de interés por cada run_id x year:
+metrics_run_year <- all_runs %>%
+  group_by(source_file, run_id, estrategia, year) %>%
+  summarize(
+    days = n(),
+    cum_infectados = sum(Infectados, na.rm = TRUE),   # suma de Infectados diario -> proxy de carga
+    peak_infectados = max(Infectados, na.rm = TRUE),
+    mean_infectados = mean(Infectados, na.rm = TRUE),
+    peak_day = day[which.max(Infectados)][1],
+    .groups = "drop"
+  )
+
+write_csv(metrics_run_year, file.path(out_dir, "metrics_run_year.csv"))
+
+# ------- RESUMEN POR ESTRATEGIA (ANUAL) -------
+summary_by_strategy <- metrics_run_year %>%
+  group_by(estrategia) %>%
+  summarize(
+    n_runs = n(),
+    mean_cum = mean(cum_infectados, na.rm = TRUE),
+    sd_cum = sd(cum_infectados, na.rm = TRUE),
+    median_cum = median(cum_infectados, na.rm = TRUE),
+    mean_peak = mean(peak_infectados, na.rm = TRUE),
+    sd_peak = sd(peak_infectados, na.rm = TRUE),
+    median_peak = median(peak_infectados, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+write_csv(summary_by_strategy, file.path(out_dir, "summary_by_strategy.csv"))
+
+# ------- GRAFICA 1: Serie temporal (media ± sd) por estrategia -------
+ts_summary <- all_runs %>%
+  group_by(estrategia, year, day) %>%
+  summarize(
+    mean_I = mean(Infectados, na.rm = TRUE),
+    sd_I = sd(Infectados, na.rm = TRUE),
+    n = n(),
+    .groups = "drop"
+  )
+
+p_ts <- ggplot(ts_summary, aes(x = day, y = mean_I, color = estrategia, fill = estrategia)) +
+  geom_line(size = 0.8, alpha = 0.9) +
+  geom_ribbon(aes(ymin = pmax(0, mean_I - sd_I), ymax = mean_I + sd_I), alpha = 0.2, color = NA) +
+  facet_wrap(~ year, ncol = 1, scales = "free_x") +
+  labs(title = "Infectados: media ± sd por día y estrategia",
+       x = "Día del año", y = "Infectados (media)") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+ggsave(file.path(out_dir, "ts_mean_sd_by_strategy.png"), p_ts, width = 10, height = 6, dpi = 300)
+
+# ------- GRAFICA 2: Boxplots de carga anual (cum_infectados) por estrategia -------
+p_box_cum <- ggplot(metrics_run_year, aes(x = estrategia, y = cum_infectados)) +
+  geom_violin(trim = TRUE, alpha = 0.4) +
+  geom_boxplot(width = 0.1, outlier.size = 1, position = position_nudge(x = 0)) +
+  labs(title = "Distribución de la carga anual (suma de Infectados) por estrategia",
+       x = "Estrategia", y = "Carga anual (suma Infectados)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 25, hjust = 1))
+
+ggsave(file.path(out_dir, "violin_cum_infectados_by_strategy.png"), p_box_cum, width = 9, height = 5, dpi = 300)
+
+# ------- GRAFICA 3: Boxplots de peak por estrategia -------
+p_box_peak <- ggplot(metrics_run_year, aes(x = estrategia, y = peak_infectados)) +
+  geom_boxplot() +
+  labs(title = "Máximo diario de Infectados por estrategia (peak)",
+       x = "Estrategia", y = "Peak Infectados (máximo diario)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 25, hjust = 1))
+
+ggsave(file.path(out_dir, "box_peak_infectados_by_strategy.png"), p_box_peak, width = 9, height = 5, dpi = 300)
+
+# ------- TABLA: top runs por peak y por carga ----
+
+```
+
+A partir del siguiente código, se hace de manera iterativa cambiando los paths y las imágenes de salida. Se generan las gráficas de los resultados con el CSV de salida de los diferentes experimentos realizados
+
+```{r}
+
+library(tidyverse)
+
+# -------- CONFIG --------
+file_path <- "resultados/run_008_ambas_seed123/datos_completos.csv"    
+output_png <- "ambas_seed123.png"   
+estrategia_control <- "LSM + ITN-IRS (Seed 123)"      # <<--- cámbialo aquí fácilmente
+
+width <- 10; height <- 6; dpi <- 300
+
+# limpieza ultra minimal
+clean_to_numeric <- function(x) {
+  if (is.numeric(x)) return(x)
+  x_chr <- as.character(x)
+  x_chr <- str_replace_all(x_chr, ",(?=\\d{3}(?:[,\\.]|$))", "")
+  x_chr <- str_replace_all(x_chr, "\\s+", "")
+  suppressWarnings(as.numeric(x_chr))
+}
+
+# leer archivo
+df <- readr::read_csv(file_path, show_col_types = FALSE)
+
+# columnas mínimas necesarias
+if (!"day" %in% names(df)) df <- df %>% mutate(day = row_number())
+if (!"run_id" %in% names(df)) df <- df %>% mutate(run_id = "single_file")
+df <- df %>% mutate(estrategia = estrategia_control)   # <<--- fuerza la estrategia
+
+# -------- SOLO ESTAS 2 COLUMNAS --------
+comp_cols <- c("Expuestos", "Infectados")
+
+# crear si faltan
+for (col in comp_cols) if (!col %in% names(df)) df[[col]] <- NA_real_
+
+# convertir a numeric
+df <- df %>% mutate(across(all_of(comp_cols), ~ clean_to_numeric(.)))
+
+# day 1..365 + year
+df <- df %>%
+  mutate(day_global = suppressWarnings(as.integer(day))) %>%
+  { if (all(is.na(.$day_global))) mutate(., day_global = row_number()) else . } %>%
+  mutate(
+    day = ((day_global - 1) %% 365) + 1,
+    year = ceiling(day_global / 365)
+  )
+
+# evitar fallos
+if (all(is.na(df[comp_cols]))) stop("Las columnas Expuestos e Infectados están en NA.")
+
+# formato largo
+df_long <- df %>%
+  select(run_id, estrategia, year, day, all_of(comp_cols)) %>%
+  pivot_longer(cols = all_of(comp_cols),
+               names_to = "compartment",
+               values_to = "count")
+
+# -------- PLOT --------
+p <- ggplot(df_long, aes(
+    x = day, y = count, color = compartment,
+    group = interaction(compartment, year),
+    linetype = factor(year)
+)) +
+  geom_line(na.rm = TRUE, size = 0.8) +
+  labs(
+    title = paste0("Expuestos e Infectados – Estrategia: ", estrategia_control),
+    x = "Día", y = "Cantidad",
+    color = "Compartimento", linetype = "Año"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "bottom")
+
+ggsave(output_png, p, width = width, height = height, dpi = dpi)
+print(p)
+
+message("Gráfico guardado en: ", normalizePath(output_png))
+
+
+
+```
+
+```{r}
+# plot_huevos_mosquitos_completo.R
+
+library(tidyverse)
+
+# -------- CONFIG --------
+file_path <- "resultados/run_004_ambas_seed42/datos_completos.csv"    
+output_png <- "mosq_ambas_seed42.png"   
+estrategia_control <- "LSM ITN-IRS (Seed 42)"      # <<--- cámbialo aquí fácilmente
+
+width <- 10; height <- 6; dpi <- 300
+
+# limpieza ultra minimal (idéntica a la anterior)
+clean_to_numeric <- function(x) {
+  if (is.numeric(x)) return(x)
+  x_chr <- as.character(x)
+  x_chr <- str_replace_all(x_chr, ",(?=\\d{3}(?:[,\\.]|$))", "")
+  x_chr <- str_replace_all(x_chr, "\\s+", "")
+  suppressWarnings(as.numeric(x_chr))
+}
+
+# leer archivo
+df <- readr::read_csv(file_path, show_col_types = FALSE)
+
+# columnas mínimas necesarias
+if (!"day" %in% names(df)) df <- df %>% mutate(day = row_number())
+if (!"run_id" %in% names(df)) df <- df %>% mutate(run_id = "single_file")
+df <- df %>% mutate(estrategia = estrategia_control)
+
+# ---------- MOSQUITOS: preparar columnas ----------
+# Si no existe Mosquitos_Total intentar crearlo
+if (!"Mosquitos_Total" %in% names(df)) {
+  if (all(c("Mosquitos_S", "Mosquitos_I") %in% names(df))) {
+    df <- df %>% mutate(Mosquitos_Total = Mosquitos_S + Mosquitos_I)
+  } else {
+    df$Mosquitos_Total <- NA_real_
+  }
+}
+
+# ---------- AGREGAR HUEVOS ----------
+# Verificamos o creamos columna Huevos
+if (!"Huevos" %in% names(df)) df$Huevos <- NA_real_
+
+# Necesitamos estas columnas
+comp_cols <- c("Mosquitos_S", "Mosquitos_I", "Mosquitos_Total", "Huevos")
+
+# Si alguna falta, crearla con NA
+for (col in comp_cols) if (!col %in% names(df)) df[[col]] <- NA_real_
+
+# convertir a numeric
+df <- df %>% mutate(across(all_of(comp_cols), ~ clean_to_numeric(.)))
+
+# day 1..365 + year
+df <- df %>%
+  mutate(day_global = suppressWarnings(as.integer(day))) %>%
+  { if (all(is.na(.$day_global))) mutate(., day_global = row_number()) else . } %>%
+  mutate(
+    day = ((day_global - 1) %% 365) + 1,
+    year = ceiling(day_global / 365)
+  )
+
+# evitar fallos
+if (all(is.na(df[comp_cols]))) stop("Todas las columnas de mosquitos/huevos están en NA.")
+
+# formato largo
+df_long <- df %>%
+  select(run_id, estrategia, year, day, all_of(comp_cols)) %>%
+  pivot_longer(cols = all_of(comp_cols),
+               names_to = "variable",
+               values_to = "count")
+
+# -------- PLOT --------
+p <- ggplot(df_long, aes(
+    x = day, y = count, color = variable,
+    group = interaction(variable, year),
+    linetype = factor(year)
+)) +
+  geom_line(na.rm = TRUE, size = 0.8) +
+  labs(
+    title = paste0("Mosquitos y Huevos – Estrategia: ", estrategia_control),
+    x = "Día", y = "Cantidad",
+    color = "Variable", linetype = "Año"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "bottom")
+
+ggsave(output_png, p, width = width, height = height, dpi = dpi)
+print(p)
+message("Gráfico guardado en: ", normalizePath(output_png))
+
+
+```
+
+Se realiza el mismo proceso para determinar la distribución que siguen la población de los mosquitos junto a los huevos que se generan y al final se plotea la gráfica de temperatura la cuál pues es la misma en todos los casos, pues se evalúa el mismo año. Solo se realiza un año por limitaciones de tiempo y cómputo
+
+```{r}
+# plot_temperatura_by_strategy.R
+library(tidyverse)
+
+# -------- CONFIG --------
+file_path <- "resultados/run_001_sin_control_seed42/datos_completos.csv"   # <-- cámbialo
+output_png <- "temperatura_seed42.png"
+
+estrategia_control <- "Temperatura (Seed 42)"   # <--- cámbialo fácilmente
+
+width <- 10; height <- 6; dpi <- 300
+
+# limpieza ultra minimal (igual que siempre)
+clean_to_numeric <- function(x) {
+  if (is.numeric(x)) return(x)
+  x_chr <- as.character(x)
+  x_chr <- str_replace_all(x_chr, ",(?=\\d{3}(?:[,\\.]|$))", "")
+  x_chr <- str_replace_all(x_chr, "\\s+", "")
+  suppressWarnings(as.numeric(x_chr))
+}
+
+# leer archivo
+df <- readr::read_csv(file_path, show_col_types = FALSE)
+
+# columnas mínimas
+if (!"day" %in% names(df)) df <- df %>% mutate(day = row_number())
+if (!"run_id" %in% names(df)) df <- df %>% mutate(run_id = "single_file")
+df <- df %>% mutate(estrategia = estrategia_control)
+
+# asegurarnos de que exista la columna
+if (!"Temperatura" %in% names(df)) {
+  stop("El archivo no contiene la columna 'Temperatura'.")
+}
+
+# convertir a numeric por seguridad
+df <- df %>% mutate(Temperatura = clean_to_numeric(Temperatura))
+
+# day 1..365 + year
+df <- df %>%
+  mutate(day_global = suppressWarnings(as.integer(day))) %>%
+  { if (all(is.na(.$day_global))) mutate(., day_global = row_number()) else . } %>%
+  mutate(
+    day = ((day_global - 1) %% 365) + 1,
+    year = ceiling(day_global / 365)
+  )
+
+# armar df largo
+df_long <- df %>%
+  select(run_id, estrategia, year, day, Temperatura)
+
+# -------- PLOT: Temperatura --------
+p <- ggplot(df_long, aes(
+    x = day, y = Temperatura,
+    group = factor(year),
+    linetype = factor(year)
+)) +
+  geom_line(size = 0.8, color = "#E67E22") + 
+  labs(
+    title = paste0("Temperatura diaria – Estrategia: ", estrategia_control),
+    x = "Día", y = "Temperatura (°C)",
+    linetype = "Año"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "bottom")
+
+# guardar y mostrar
+ggsave(output_png, p, width = width, height = height, dpi = dpi)
+print(p)
+
+message("Gráfico guardado en: ", normalizePath(output_png))
+
+```

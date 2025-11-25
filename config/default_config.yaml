@@ -1,74 +1,105 @@
+# Configuración por defecto para el modelo ABM del Dengue
+
 simulation:
-  steps: 364
+  steps: 364                    # 1 año completo
   width: 150
   height: 150
-  num_humanos: 7000
-  num_mosquitos: 1500
-  num_huevos: 500
-  infectados_iniciales: 20
-  mosquitos_infectados_iniciales: 12
+  num_humanos: 10000           # Escala 1:61 (613,000 / 10,000)
+  num_mosquitos: 5000          # Población alta de mosquitos
+  num_huevos: 2000             # 10% de mosquitos
+  infectados_iniciales: 2       # Pocos casos iniciales humanos
+  mosquitos_infectados_iniciales: 3000  # Alto reservorio viral en mosquitos
   usar_lsm: false
-  usar_itn_irs: false
-  seed: null      # dejar aleatoria para explorar variabilidad
+  usar_itn_irs: true
+  seed: null
+  fecha_inicio: "2022-01-01"
 
 human_disease:
-  incubation_period: 5.0        # igual
-  infectious_period: 8.0        # antes 9: brote aún fuerte, pero un poco menos prolongado
+  incubation_period: 5.0       # Período de incubación (días)
+  infectious_period: 8.0        # Período infeccioso (días) - γ_h = 1/8 = 0.125
 
 mosquito_disease:
-  mortality_rate: 0.07          # antes 0.08 → un poco menos mortal
-  sensory_range: 2              # lo dejamos reducido (2) para no hipermezclar
-  incubation_period: 10         # igual
-  carrying_capacity_per_cell: 3000  # antes 10000 → más acorde con docstring del grid
+  mortality_rate: 0.075        # Vida media ~13.3 días (realista para Aedes aegypti)
+  sensory_range: 3             # Rango de búsqueda de humanos (celdas)
+  incubation_period: 7        # EIP = 10 días (período de incubación extrínseca)
+  carrying_capacity_per_cell: 3000  # Máximo mosquitos por celda
 
 transmission:
-  mosquito_to_human_prob: 0.65      # antes 0.4 → leve aumento, sin ser explosivo
-  human_to_mosquito_prob: 0.33      # antes 0.25 → más infecciones de mosquitos
-  bite_rate: 0.65                   # antes 0.5 → más picaduras, pero no tan alto como 0.7             # antes 0.7 (~1 comida cada 2 días aprox.)
+  mosquito_to_human_prob: 0.002  # α - MUY BAJO: Transmisión M→H esporádica
+  human_to_mosquito_prob: 0.50   # β - ALTO: Mantiene reservorio en mosquitos
+  bite_rate: 0.25                # ~1 picadura cada 3 días
+  vertical_transmission_rate: 0.30  # 18% (máximo científico, Gunther 2007)
 
 mobility:
+  # Probabilidades diarias de ubicación por tipo de agente
+  # Cada fila debe sumar 1.0 (distribución de probabilidad)
+  #
+  # NOTA: Estos valores son estimaciones basadas en la conversión del modelo
+  # horario anterior (que asumía incorrectamente pasos horarios).
+  #
+  # Procedimiento de cálculo:
+  # 1. Estudiantes: 6-14h escuela (8h) → 8/24 = 33% → 35% destination
+  #                 16-20h parque (4h × 30% prob) → 10% park
+  #                 Resto → 55% home
+  # 2. Trabajadores: 7-18h oficina (11h) → 11/24 = 46% → 35% destination
+  #                  16-20h parque (4h × 10% prob) → 5% park
+  #                  Resto → 60% home
+  # 3. Móviles: Movimiento cada 2h entre 6-20h (14h activo) → 40% random
+  #             25% prob parque en horario activo → 20% park
+  #             Resto → 40% home
+  # 4. Estacionarios: Siempre en casa con 5% prob parque → 95% home, 5% park
+  #
+  # RECOMENDACIÓN: Ajustar con datos empíricos de movilidad urbana si disponibles
+  # (encuestas de movilidad, datos GPS, estudios etnográficos, etc.)
+  
   student_daily_probabilities:
-    home: 0.55
-    destination: 0.35
-    park: 0.10
+    home: 0.55      # En casa (mañana temprano, noche)
+    destination: 0.35  # En escuela (día)
+    park: 0.10      # En parque (tarde)
   
   worker_daily_probabilities:
-    home: 0.60
-    destination: 0.35
-    park: 0.05
+    home: 0.60      # En casa
+    destination: 0.35  # En oficina
+    park: 0.05      # En parque
   
   mobile_daily_probabilities:
-    home: 0.45      # antes 0.40 → un pelín más caseros
-    destination: 0.0
-    park: 0.15      # antes 0.20
-    random: 0.40
+    home: 0.45      # En casa
+    destination: 0.0   # Sin destino fijo
+    park: 0.15      # En parque
+    random: 0.40    # Ubicación aleatoria
   
   stationary_daily_probabilities:
-    home: 0.95
+    home: 0.95      # Casi siempre en casa
     destination: 0.0
-    park: 0.05
+    park: 0.05      # Rara vez en parque
     random: 0.0
 
+
 mosquito_breeding:
-  eggs_per_female: 35          # antes 25 → más cría, pero no tanto como 50
+  eggs_per_female: 25          # Balance para población estable
   mating_probability: 0.6
   female_ratio: 0.52
-
-  immature_development_threshold: 8.3
-  immature_thermal_constant: 181.2
+  # Modelo de grados-día acumulados (GDD) para desarrollo inmaduro
+  # Basado en Tun-Lin et al. (1999) para Aedes aegypti
+  immature_development_threshold: 8.3    # T_base_inmaduro (°C) - umbral térmico mínimo
+  immature_thermal_constant: 181.2       # K_inmaduro (°C·día) - constante térmica total
   rainfall_threshold: 0.0
-
-  breeding_site_ratio: 0.15    # antes 0.10 → más sitios permanentes, pero menos que 0.20
-
-  gonotrophic_cycle_days: 3    # antes 5 → ponen huevos un poco más frecuente
-
-  egg_mortality_rate: 0.20     # antes 0.35 → menos mortalidad, pero más que el 0.25 inicial
-
+  breeding_site_ratio: 0.15     # 15% de celdas con sitios de cría
+  
+  # Ciclo gonotrófico (reproducción de hembras)
+  gonotrophic_cycle_days: 4     # Días mínimos entre puestas
+                                 # Referencia: Scott et al. (1993), Maciel-de-Freitas et al. (2006)
+  
+  # Mortalidad de huevos
+  egg_mortality_rate: 0.15      # 15% mortalidad diaria (reducido para mayor supervivencia)
+                                 # Causas: desecación, depredación, condiciones adversas
+  
+  # Sitios de cría temporales (charcos post-lluvia)
   temporary_sites:
-    min_rainfall: 5.0
-    sites_per_mm: 0.40         # antes 0.30 (y antes 0.50) → valor intermedio
-    duration_days: 7           # antes 6 → charcos duran un poco más
-    max_sites: 90              # antes 80 (y antes 100)
+    min_rainfall: 5.0           # mm mínimos para crear charcos
+    sites_per_mm: 0.5           # charcos creados por mm de lluvia (aumentado de 0.4)
+    duration_days: 9            # días que persiste un charco sin lluvia (aumentado de 7)
+    max_sites: 120              # límite máximo de charcos simultáneos (aumentado de 90)
 
 population:
   mobility_distribution:
@@ -79,18 +110,22 @@ population:
 
 environment:
   cell_types:
-    water_ratio: 0.05
-    park_ratio: 0.10
+    water_ratio: 0.05      # 5 % de celdas tipo agua (quebradas, drenajes)
+    park_ratio: 0.10       # 10 % de celdas tipo parque o zonas verdes
   zone_sizes:
-    water_min: 2
+    water_min: 2           # zonas de 2–4 celdas (~80–150 m)
     water_max: 4
-    park_min: 3
+    park_min: 3            # parques de 3–6 celdas (~0,4–0,9 ha)
     park_max: 6
   mosquito_flight:
-    max_range: 5
+    max_range: 5           # 5 celdas (~190 m de rango de vuelo diario)
   grid_generation:
-    max_placement_failures: 50
-    max_total_attempts: 500
+    max_placement_failures: 50  # Límite de fallos consecutivos al colocar zonas
+    max_total_attempts: 500     # Límite total de intentos de colocación
+  synthetic_climate:
+    rain_probability: 0.35 # 35 % de días con lluvia (~128 días/año)
+    rain_min_mm: 5.0       # lluvias típicas ligeras a moderadas
+    rain_max_mm: 50.0      # picos en temporada húmeda
 
 control:
   lsm:
@@ -103,29 +138,54 @@ control:
     effectiveness: 0.7
 
 human_behavior:
-  isolation_probability: 0.3     # antes 0.7
+  isolation_probability: 0.8
   infected_mobility_radius: 1
 
-serotypes:
-  enabled: true
-  num_serotypes: 4
-  cross_immunity_duration_days: 75  # ~2.5 meses de inmunidad cruzada temporal
-  initial_distribution: [0.25, 0.25, 0.25, 0.25]  # DENV-1, DENV-2, DENV-3, DENV-4
-
 climate_effects:
-  # Rangos de temperatura óptima y extrema (°C)
-  temperature_optimal_min: 25
-  temperature_optimal_max: 30
-  temperature_extreme_cold: 10  # Mortalidad muy alta
-  temperature_extreme_heat: 40  # Mortalidad muy alta
-  temperature_suboptimal_cold: 15  # Mortalidad moderada
-  temperature_suboptimal_heat: 35  # Mortalidad moderada
+  # Temperatura - Efectos en picadura y transmisión
+  temperature_optimal_bite: 28.0          # °C óptima para picadura
+  temperature_optimal_transmission: 26.0  # °C óptima para transmisión
+  temperature_range_tolerance: 10.0       # Rango de tolerancia (parábola)
   
-  # Multiplicadores de mortalidad de mosquitos adultos
-  mosquito_mortality_extreme_multiplier: 2.5  # T < 10°C o T > 40°C
-  mosquito_mortality_suboptimal_multiplier: 1.5  # T < 15°C o T > 35°C
+  # EIP (Incubación) por temperatura
+  eip_cold_multiplier: 2.0      # <18°C (duplica tiempo)
+  eip_cool_multiplier: 1.5      # 18-22°C
+  eip_warm_multiplier: 0.7      # >26°C (reduce tiempo)
   
-  # Mortalidad de huevos por temperatura
-  egg_mortality_extreme_cold: 0.90  # 90% mueren si T < 10°C
-  egg_mortality_extreme_heat: 0.80  # 80% mueren si T > 40°C
-  egg_mortality_suboptimal: 0.50    # 50% mueren si 10°C < T < 15°C o 35°C < T < 40°C
+  # Precipitación - Efectos en mortalidad de huevos (Sequía/Inundación)
+  drought_threshold_7days: 10   # mm en 7 días (sequía severa)
+  drought_moderate_7days: 25    # mm en 7 días (sequía moderada)
+  flood_threshold_7days: 100    # mm en 7 días (exceso/lavado)
+  
+  # Precipitación - Efectos en actividad de vuelo
+  rain_activity_penalty_moderate: 0.6  # 10-20mm (reduce 40%)
+  rain_activity_penalty_heavy: 0.3     # >20mm (reduce 70%)
+  
+  # Rangos de temperatura para mortalidad de mosquitos
+  temperature_optimal_min: 15
+  temperature_optimal_max: 35
+  temperature_extreme_cold: 10
+  temperature_extreme_heat: 40
+  temperature_suboptimal_cold: 15
+  temperature_suboptimal_heat: 35
+  
+  # Multiplicadores de mortalidad de mosquitos
+  mosquito_mortality_extreme_multiplier: 2.5
+  mosquito_mortality_suboptimal_multiplier: 1.5
+  
+  # Inserción de mosquitos infectados por lluvia
+  rain_insertion_threshold: 15.0    # mm mínimos para insertar
+  rain_insertion_factor_divisor: 8.0 # Divisor para factor de lluvia
+  rain_insertion_multiplier: 0.93   # Multiplicador de cantidad
+  rain_insertion_limit: 100         # Máximo de mosquitos insertados por día
+
+control:
+  lsm:
+    frequency_days: 7
+    coverage: 0.7
+    effectiveness: 0.8
+  itn_irs:
+    duration_days: 90
+    coverage: 0.6
+    effectiveness: 0.7
+    mortality_factor: 0.2  # Probabilidad de muerte al entrar a casa tratada

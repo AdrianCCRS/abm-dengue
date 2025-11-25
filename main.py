@@ -116,6 +116,16 @@ def ejecutar_simulacion(
     DengueModel
         Modelo ejecutado con datos recolectados
     """
+    # Validar duración de la simulación con datos climáticos
+    if climate_data_path:
+        max_days = 365  # Limitado por los datos climáticos del CSV (2022)
+        if steps > max_days:
+            if verbose:
+                print(f"⚠️  ADVERTENCIA: La simulación solicitada ({steps} días) excede el rango")
+                print(f"   de datos climáticos disponibles ({max_days} días).")
+                print(f"   Se limitará a {max_days} días.\n")
+            steps = max_days
+    
     # Crear modelo
     if verbose:
         print("=" * 70)
@@ -153,7 +163,7 @@ def ejecutar_simulacion(
     for i in range(steps):
         modelo.step()
         
-        # Mostrar progreso DIARIO para seguimiento en tiempo real
+        # Mostrar progreso diario (pero solo reporte de pérdidas de inmunidad cada 10 días)
         if verbose:
             infectados = modelo._contar_humanos_estado(EstadoSalud.INFECTADO)
             expuestos = modelo._contar_humanos_estado(EstadoSalud.EXPUESTO)
@@ -163,21 +173,53 @@ def ejecutar_simulacion(
             huevos = modelo._contar_huevos()
             susceptibles = modelo._contar_humanos_estado(EstadoSalud.SUSCEPTIBLE)
             
-            # Imprimir en la misma línea (sobrescribir)
-            print(f"\rDía {i+1:3d}/{steps}: "
-                  f"H S:{susceptibles:3d} E:{expuestos:2d} I:{infectados:2d} R:{recuperados:3d} "
-                  f"| M A:{mosquitos_adultos:3d} (I:{mosquitos_inf:2d}) H:{huevos:3d} "
-                  f"| T:{modelo.temperatura_actual:4.1f}°C P:{modelo.precipitacion_actual:4.1f}mm", 
-                  end='', flush=True)
+            # Obtener estadísticas de huevos (incluye infectados)
+            eggs_stats = modelo.egg_manager.get_eggs_stats()
+            huevos_infectados = eggs_stats['infectados']
+            pct_huevos_inf = eggs_stats['porcentaje_infectados']
+            
+            # Obtener número de charcos temporales
+            charcos = len(modelo.sitios_cria_temporales)
+            
+            # Imprimir reporte detallado
+            print(f"Día {i+1:3d}/{steps}: "
+                  f"H S:{susceptibles:4d} E:{expuestos:2d} I:{infectados:3d} R:{recuperados:4d} | "
+                  f"M A:{mosquitos_adultos:5d} (I:{mosquitos_inf:4d}) H:{huevos:8d} | "
+                  f"T:{modelo.temperatura_actual:4.1f}°C P:{modelo.precipitacion_actual:4.1f}mm", 
+                  end='')
+            
+            # Mostrar huevos infectados si hay
+            if huevos_infectados > 0:
+                print(f" | H_inf:{huevos_infectados:5d} ({pct_huevos_inf:4.1f}%)", end='')
+            
+            # Mostrar charcos si hay
+            if charcos > 0:
+                print(f" | Charcos:{charcos:2d}", end='')
+            
+            # Mostrar pérdidas de inmunidad cada 10 días
+            if (i % 10 == 9 or i == 0 or i == steps - 1):
+                perdidas_inmunidad = modelo.immunity_losses_count
+                if perdidas_inmunidad > 0:
+                    print(f" | R→S:{perdidas_inmunidad:3d}", end='')
+                    modelo.immunity_losses_count = 0  # Resetear contador
+            
+            print()  # Nueva línea
     
     if verbose:
-        print()  # Nueva línea después del último día
         print("\n" + "="*70)
         print("Simulación completada!")
+        
+        # Estadísticas finales de huevos
+        eggs_stats = modelo.egg_manager.get_eggs_stats()
+        
         print(f"Resumen final:")
         print(f"   • Total infectados: {modelo._contar_humanos_estado(EstadoSalud.INFECTADO)}")
         print(f"   • Total recuperados: {modelo._contar_humanos_estado(EstadoSalud.RECUPERADO)}")
         print(f"   • Mosquitos adultos: {modelo._contar_mosquitos_adultos()}")
+        print(f"   • Mosquitos infectados: {modelo._contar_mosquitos_estado(EstadoMosquito.INFECTADO)}")
+        print(f"   • Huevos totales: {eggs_stats['total']}")
+        print(f"   • Huevos infectados: {eggs_stats['infectados']} ({eggs_stats['porcentaje_infectados']:.2f}%)")
+        print(f"   • Charcos activos: {len(modelo.sitios_cria_temporales)}")
         print(f"   • Tasa de ataque: {modelo._contar_humanos_estado(EstadoSalud.RECUPERADO)/num_humanos*100:.1f}%")
         print("="*70)
     

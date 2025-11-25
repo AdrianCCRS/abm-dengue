@@ -88,6 +88,7 @@ class HumanAgent(Agent):
         # Estado epidemiológico
         self.estado = EstadoSalud.SUSCEPTIBLE
         self.dias_en_estado = 0
+        self.immunity_loss_prob = getattr(model, 'immunity_loss_prob', 0.005)  # 0.5% por defecto
         
         # Inmunidad por serotipo (DENV-1, DENV-2, DENV-3, DENV-4)
         self.inmunidad_permanente = set()  # {1, 2, 3, 4} - serotipos con inmunidad permanente
@@ -155,14 +156,9 @@ class HumanAgent(Agent):
         
         Transiciones:
         - S → E: Al ser picado por mosquito infectado (manejado en interacción)
-        - E → I: Después de incubation_period días
-        - I → R: Después de infectious_period días
-        - R → S: Inmunidad permanente al serotipo específico, inmunidad cruzada temporal a otros
-        
-        Inmunidad por serotipo:
-        - Inmunidad permanente al serotipo que causó la infección
-        - Inmunidad cruzada temporal (~75 días) a los otros 3 serotipos
-        - Humano puede infectarse hasta 4 veces (una por cada serotipo)
+        - E → I: Después de duracion_expuesto días
+        - I → R: Después de duracion_infectado días
+        - R → S: Con probabilidad immunity_loss_prob (pérdida de inmunidad temporal)
         """
         self.dias_en_estado += 1
         
@@ -208,6 +204,14 @@ class HumanAgent(Agent):
                 # Resetear flag de aislamiento para futuras reinfecciones
                 if hasattr(self, '_aislamiento_decidido'):
                     self._aislamiento_decidido = False
+        
+        elif self.estado == EstadoSalud.RECUPERADO:
+            # Pérdida de inmunidad temporal: R → S
+            # Probabilidad diaria (ej: 0.5% = ~18% anual)
+            if self.model.random.random() < self.immunity_loss_prob:
+                self.model.immunity_losses_count += 1  # Incrementar contador del modelo
+                self.estado = EstadoSalud.SUSCEPTIBLE
+                self.dias_en_estado = 0
     
     def get_exposed(self, serotipo: int = 1):
         """

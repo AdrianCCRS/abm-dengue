@@ -265,6 +265,20 @@ class MosquitoPopulationGrid:
         # Limitar mortalidad a 1.0 (100%)
         mortality_rate = min(1.0, mortality_rate)
         
+        # MORTALIDAD POR CONTROL (ITN/IRS)
+        # Si hay insecticidas/redes, aumenta la mortalidad
+        if getattr(model, 'itn_irs_activo', False):
+            coverage = getattr(model, 'itn_irs_coverage', 0.6)
+            effectiveness = getattr(model, 'itn_irs_effectiveness', 0.7)
+            
+            # Mortalidad adicional: probabilidad de entrar a casa tratada y morir
+            # Factor configurable (default 0.2)
+            mortality_factor = getattr(model, 'itn_irs_mortality_factor', 0.2)
+            control_mortality = coverage * effectiveness * mortality_factor
+            
+            # Combinar probabilidades: P(muerte_total) = 1 - (1-P_natural)*(1-P_control)
+            mortality_rate = 1.0 - (1.0 - mortality_rate) * (1.0 - control_mortality)
+        
         # Mortalidad por compartimento (binomial o aproximación normal)
         if self.S_m[x, y] > 0:
             deaths_S = self._safe_binomial(int(self.S_m[x, y]), mortality_rate)
@@ -298,8 +312,20 @@ class MosquitoPopulationGrid:
             return
         
         # Período de incubación extrínseca (días)
-        # Usar parámetro del modelo si existe, sino default 10 días
-        eip = getattr(model, 'mosquito_incubation_period', 10)
+        base_eip = getattr(model, 'mosquito_incubation_period', 10)
+        
+        # AJUSTE POR TEMPERATURA: Virus se replica más rápido en temperaturas altas
+        temp = model.temperatura_actual
+        if temp < 18:
+            eip_multiplier = getattr(model, 'eip_cold_multiplier', 2.0)  # Muy lento
+        elif temp < 22:
+            eip_multiplier = getattr(model, 'eip_cool_multiplier', 1.5)  # Lento
+        elif temp < 26:
+            eip_multiplier = 1.0  # Normal
+        else:
+            eip_multiplier = getattr(model, 'eip_warm_multiplier', 0.7)  # Rápido
+        
+        eip = base_eip * eip_multiplier
         transition_rate = 1.0 / eip
         
         # Mosquitos que completan incubación
@@ -307,6 +333,32 @@ class MosquitoPopulationGrid:
         
         self.E_m[x, y] -= transitions
         self.I_m[x, y] += transitions
+    
+    def _stochastic_round(self, value: float) -> int:
+        """
+        Redondeo estocástico: redondea al entero más cercano probabilísticamente.
+        
+        Ejemplo: 2.7 → 70% probabilidad de 3, 30% de 2
+        
+        Esto es CRÍTICO para poblaciones pequeñas donde int() truncaría
+        a cero y perdería individuos (ej: 1 mosquito * 0.52 = 0.52 → 0 con int())
+        
+        Parameters
+        ----------
+        value : float
+            Valor a redondear
+            
+        Returns
+        -------
+        int
+            Valor redondeado estocásticamente
+        """
+        import numpy as np
+        base = int(value)
+        remainder = value - base
+        if np.random.random() < remainder:
+            return base + 1
+        return base
     
     def _safe_binomial(self, n: int, p: float) -> int:
         """
@@ -389,8 +441,24 @@ class MosquitoPopulationGrid:
             return
         
         # Parámetros de transmisión
-        alpha = model.mosquito_to_human_prob  # α
-        beta = model.human_to_mosquito_prob   # β
+        base_alpha = model.mosquito_to_human_prob  # α
+        base_beta = model.human_to_mosquito_prob   # β
+        
+        # AJUSTE POR TEMPERATURA: Competencia vectorial varía con temperatura
+        temp = model.temperatura_actual
+        temp_optimal_transmission = getattr(model, 'temperature_optimal_transmission', 26.0)
+        
+        if temp < 18:
+            transmission_factor = 0.5  # Muy baja
+        elif temp < 22:
+            transmission_factor = 0.75  # Baja
+        elif temp < temp_optimal_transmission:
+            transmission_factor = 1.0  # Normal
+        else:
+            transmission_factor = 1.2  # Alta
+        
+        alpha = base_alpha * transmission_factor
+        beta = base_beta * transmission_factor
         
         # 1. Transmisión Mosquito → Humano
         if self.I_m[x, y] > 0:
@@ -433,7 +501,42 @@ class MosquitoPopulationGrid:
             return
 
         # 1. Mosquitos infecciosos que pican hoy
-        bite_rate = getattr(model, "bite_rate", 0.33)
+        base_bite_rate = getattr(model, "bite_rate", 0.33)
+        
+        # AJUSTE POR TEMPERATURA: Mosquitos pican más en temperaturas cálidas
+        # Curva cuadrática centrada en temperatura óptima (28°C para Aedes aegypti)
+        temp = model.temperatura_actual
+        temp_optimal = getattr(model, 'temperature_optimal_bite', 28.0)
+        temp_range = getattr(model, 'temperature_range_tolerance', 10.0)
+        
+        # Factor de temperatura: 1.0 en óptima, menor en extremos
+        temp_diff = (temp - temp_optimal) / temp_range
+        temp_factor = 1.0 - (temp_diff ** 2)
+        temp_factor = max(0.3, min(1.3, temp_factor))  # Rango [0.3, 1.3]
+        
+        bite_rate = base_bite_rate * temp_factor
+        
+        # PENALIZACIÓN POR LLUVIA: Lluvia fuerte reduce actividad de vuelo
+        precip = model.precipitacion_actual
+        if precip >= 20:  # Lluvia fuerte
+            rain_penalty = getattr(model, 'rain_activity_penalty_heavy', 0.3)
+        elif precip >= 10:  # Lluvia moderada
+            rain_penalty = getattr(model, 'rain_activity_penalty_moderate', 0.6)
+        else:
+            rain_penalty = 1.0  # Sin efecto
+        
+        bite_rate *= rain_penalty
+        
+        # REDUCCIÓN POR CONTROL (ITN/IRS)
+        # Redes y rociado reducen la tasa de picadura (barrera/repelencia)
+        if getattr(model, 'itn_irs_activo', False):
+            coverage = getattr(model, 'itn_irs_coverage', 0.6)
+            effectiveness = getattr(model, 'itn_irs_effectiveness', 0.7)
+            
+            # Factor de protección: reducción de picaduras
+            protection_factor = coverage * effectiveness
+            bite_rate *= (1.0 - protection_factor)
+        
         biting_I = self._safe_binomial(I, bite_rate)
         if biting_I == 0:
             return
@@ -489,7 +592,39 @@ class MosquitoPopulationGrid:
             return
 
         # 1. Mosquitos susceptibles que pican hoy
-        bite_rate = getattr(model, "bite_rate", 0.33)
+        base_bite_rate = getattr(model, "bite_rate", 0.33)
+        
+        # AJUSTE POR TEMPERATURA: Mismo ajuste que en M→H
+        temp = model.temperatura_actual
+        temp_optimal = getattr(model, 'temperature_optimal_bite', 28.0)
+        temp_range = getattr(model, 'temperature_range_tolerance', 10.0)
+        
+        temp_diff = (temp - temp_optimal) / temp_range
+        temp_factor = 1.0 - (temp_diff ** 2)
+        temp_factor = max(0.3, min(1.3, temp_factor))
+        
+        bite_rate = base_bite_rate * temp_factor
+        
+        # PENALIZACIÓN POR LLUVIA: Mismo ajuste que en M→H
+        precip = model.precipitacion_actual
+        if precip >= 20:
+            rain_penalty = getattr(model, 'rain_activity_penalty_heavy', 0.3)
+        elif precip >= 10:
+            rain_penalty = getattr(model, 'rain_activity_penalty_moderate', 0.6)
+        else:
+            rain_penalty = 1.0
+        
+        bite_rate *= rain_penalty
+        
+        # REDUCCIÓN POR CONTROL (ITN/IRS)
+        # Mismo efecto barrera que en M→H
+        if getattr(model, 'itn_irs_activo', False):
+            coverage = getattr(model, 'itn_irs_coverage', 0.6)
+            effectiveness = getattr(model, 'itn_irs_effectiveness', 0.7)
+            
+            protection_factor = coverage * effectiveness
+            bite_rate *= (1.0 - protection_factor)
+        
         biting_S = self._safe_binomial(S, bite_rate)
         if biting_S == 0:
             return
@@ -517,6 +652,10 @@ class MosquitoPopulationGrid:
         Solo hembras que han picado pueden reproducirse.
         Los huevos se agregan al EggManager.
         
+        TRANSMISIÓN VERTICAL: Hembras infectadas (I) o expuestas (E) pueden
+        transmitir el virus a sus huevos. La tasa de transmisión vertical
+        típicamente es del 1-10% (configurada en vertical_transmission_rate).
+        
         Parameters
         ----------
         x, y : int
@@ -533,28 +672,62 @@ class MosquitoPopulationGrid:
         female_ratio = model.female_ratio
         eggs_per_female = model.eggs_per_female
         gonotrophic_cycle = model.gonotrophic_cycle_days
+        vertical_transmission_rate = getattr(model, 'vertical_transmission_rate', 0.05)
         
-        # Hembras en la celda
-        females = int(total_mosquitos * female_ratio)
+        # BOOST POR LLUVIA: Condiciones húmedas favorecen transmisión vertical
+        # Lluvia moderada-fuerte aumenta la tasa de transmisión del virus a huevos
+        precipitacion = getattr(model, 'precipitacion_actual', 0.0)
+        if precipitacion >= 10.0:  # Umbral de lluvia moderada (10mm)
+            # Boost lineal: 10mm→0%, 50mm→100% (duplica transmisión)
+            rain_boost = min((precipitacion - 10.0) / 40.0, 1.0)
+            vertical_transmission_rate *= (1.0 + rain_boost)
+            # Cap máximo en 80% para mantener realismo biológico
+            vertical_transmission_rate = min(vertical_transmission_rate, 0.80)
         
-        if females == 0:
+        # Hembras por estado epidemiológico
+        # USAR REDONDEO ESTOCÁSTICO en lugar de truncamiento
+        # Esto es crítico para poblaciones pequeñas de infectados
+        S_females = self._stochastic_round(self.S_m[x, y] * female_ratio)
+        E_females = self._stochastic_round(self.E_m[x, y] * female_ratio)
+        I_females = self._stochastic_round(self.I_m[x, y] * female_ratio)
+        
+        total_females = S_females + E_females + I_females
+        
+        if total_females == 0:
             return
         
         # Hembras que se reproducen (ciclo gonotrófico)
         # Probabilidad diaria = 1 / gonotrophic_cycle_days
         reproduction_prob = 1.0 / gonotrophic_cycle
-        reproducing_females = self._safe_binomial(int(females), reproduction_prob)
         
-        if reproducing_females == 0:
+        reproducing_S = self._safe_binomial(S_females, reproduction_prob)
+        reproducing_E = self._safe_binomial(E_females, reproduction_prob)
+        reproducing_I = self._safe_binomial(I_females, reproduction_prob)
+        
+        total_reproducing = reproducing_S + reproducing_E + reproducing_I
+        
+        if total_reproducing == 0:
             return
         
-        # Huevos puestos (agregar a EggManager)
-        eggs = reproducing_females * eggs_per_female
+        # Huevos puestos por hembras susceptibles (todos susceptibles)
+        eggs_from_S = reproducing_S * eggs_per_female
         
-        if eggs > 0:
-            # Agregar huevos al sitio de cría más cercano
-            # (simplificación: usar la celda actual como sitio)
-            model.egg_manager.add_eggs((x, y), eggs)
+        # Huevos puestos por hembras infectadas/expuestas
+        # Una fracción heredará el virus (transmisión vertical)
+        eggs_from_E = reproducing_E * eggs_per_female
+        eggs_from_I = reproducing_I * eggs_per_female
+        
+        # Calcular huevos infectados por transmisión vertical
+        # Solo hembras I y E pueden transmitir (virus en sangre y tejidos)
+        total_eggs_from_infected = eggs_from_E + eggs_from_I
+        infected_eggs = self._safe_binomial(int(total_eggs_from_infected), vertical_transmission_rate)
+        
+        # Total de huevos
+        total_eggs = eggs_from_S + eggs_from_E + eggs_from_I
+        
+        if total_eggs > 0:
+            # Agregar huevos al sitio de cría (celda actual)
+            model.egg_manager.add_eggs((x, y), total_eggs, infected_eggs)
     
     def _apply_carrying_capacity(self, x: int, y: int, model: 'DengueModel'):
         """

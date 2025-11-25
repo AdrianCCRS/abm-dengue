@@ -25,12 +25,17 @@ class EggBatch:
     En lugar de crear 100 agentes individuales, se crea un solo objeto
     que representa el lote completo.
     
+    TRANSMISIÓN VERTICAL: Los huevos pueden heredar el virus del dengue
+    de hembras infectadas durante la oviposición (1-10% típicamente).
+    
     Attributes
     ----------
     sitio_cria : Tuple[int, int]
         Coordenadas (x, y) del sitio de cría donde se pusieron los huevos
     cantidad : int
-        Número de huevos en el lote
+        Número total de huevos en el lote (susceptibles + infectados)
+    cantidad_infectados : int
+        Número de huevos infectados por transmisión vertical
     grados_acumulados : float
         Grados-día acumulados para desarrollo (modelo GDD)
     dias_como_huevo : int
@@ -40,6 +45,7 @@ class EggBatch:
     """
     sitio_cria: Tuple[int, int]
     cantidad: int
+    cantidad_infectados: int = 0
     grados_acumulados: float = 0.0
     dias_como_huevo: int = 0
     fecha_puesta: int = 0
@@ -83,13 +89,16 @@ class EggManager:
         self.model = model
         self.egg_batches: List[EggBatch] = []
     
-    def add_eggs(self, sitio_cria: Tuple[int, int], cantidad: int):
+    def add_eggs(self, sitio_cria: Tuple[int, int], cantidad: int, cantidad_infectados: int = 0):
         """
         Agrega un lote de huevos a un sitio de cría.
         
         Si ya existe un lote en el mismo sitio con la misma edad (mismo día),
         se agregan al lote existente. Esto maximiza la agrupación y reduce
         el número de objetos.
+        
+        TRANSMISIÓN VERTICAL: Permite agregar huevos infectados resultantes
+        de la transmisión del virus de madre a cría (1-10% típicamente).
         
         CAPACIDAD DE CARGA: Implementa un límite máximo de 500 huevos por sitio
         para simular competencia larvaria y limitación de recursos.
@@ -99,22 +108,29 @@ class EggManager:
         sitio_cria : Tuple[int, int]
             Coordenadas (x, y) del sitio de cría
         cantidad : int
-            Número de huevos a agregar
+            Número total de huevos a agregar
+        cantidad_infectados : int, default=0
+            Número de huevos infectados (por transmisión vertical)
         """
         if cantidad <= 0:
             return
+        
+        # Validar que infectados no exceda total
+        cantidad_infectados = min(cantidad_infectados, cantidad)
         
         # Buscar lote existente en el mismo sitio y mismo día
         dia_actual = self.model.dia_simulacion
         for batch in self.egg_batches:
             if batch.sitio_cria == sitio_cria and batch.fecha_puesta == dia_actual:
                 batch.cantidad += cantidad
+                batch.cantidad_infectados += cantidad_infectados
                 return
         
         # Crear nuevo lote
         self.egg_batches.append(EggBatch(
             sitio_cria=sitio_cria,
             cantidad=cantidad,
+            cantidad_infectados=cantidad_infectados,
             grados_acumulados=0.0,
             dias_como_huevo=0,
             fecha_puesta=dia_actual
@@ -168,21 +184,36 @@ class EggManager:
         agrega mosquitos susceptibles al grid de poblaciones en la celda
         correspondiente al sitio de cría.
         
+        TRANSMISIÓN VERTICAL: Los huevos infectados eclosionan como mosquitos
+        infecciosos, manteniendo el virus en la población incluso cuando
+        los adultos infectados mueren.
+        
         Parameters
         ----------
         batch : EggBatch
             Lote de huevos a eclosionar
         """
-        # Agregar mosquitos susceptibles al grid de poblaciones
-        # (modelo metapoblacional - no crear agentes individuales)
+        # Agregar mosquitos al grid de poblaciones (modelo metapoblacional)
         if hasattr(self.model, 'mosquito_pop'):
-            # Usar modelo metapoblacional
             from .mosquito_population import MosquitoState
-            self.model.mosquito_pop.add_mosquitos(
-                batch.sitio_cria, 
-                batch.cantidad,
-                MosquitoState.SUSCEPTIBLE
-            )
+            
+            # Mosquitos susceptibles (no infectados)
+            cantidad_susceptibles = batch.cantidad - batch.cantidad_infectados
+            if cantidad_susceptibles > 0:
+                self.model.mosquito_pop.add_mosquitos(
+                    batch.sitio_cria, 
+                    cantidad_susceptibles,
+                    MosquitoState.SUSCEPTIBLE
+                )
+            
+            # Mosquitos infectados por transmisión vertical
+            # Nacen directamente como INFECCIOSOS (pueden transmitir inmediatamente)
+            if batch.cantidad_infectados > 0:
+                self.model.mosquito_pop.add_mosquitos(
+                    batch.sitio_cria, 
+                    batch.cantidad_infectados,
+                    MosquitoState.INFECTIOUS
+                )
         else:
             # Fallback: crear agentes individuales (versión antigua)
             from ..agents.mosquito_agent import MosquitoAgent, EtapaVida
@@ -211,6 +242,44 @@ class EggManager:
         """
         return sum(batch.cantidad for batch in self.egg_batches)
     
+    def count_infected_eggs(self) -> int:
+        """
+        Cuenta el total de huevos INFECTADOS en todos los lotes.
+        
+        Returns
+        -------
+        int
+            Número de huevos infectados por transmisión vertical
+        """
+        return sum(batch.cantidad_infectados for batch in self.egg_batches)
+    
+    def get_eggs_stats(self) -> dict:
+        """
+        Obtiene estadísticas detalladas de huevos.
+        
+        Returns
+        -------
+        dict
+            Diccionario con:
+            - total: Total de huevos
+            - infectados: Huevos infectados
+            - susceptibles: Huevos no infectados
+            - porcentaje_infectados: % de huevos infectados
+            - lotes: Número de lotes activos
+        """
+        total = self.count_eggs()
+        infectados = self.count_infected_eggs()
+        susceptibles = total - infectados
+        porcentaje = (infectados / total * 100) if total > 0 else 0.0
+        
+        return {
+            'total': total,
+            'infectados': infectados,
+            'susceptibles': susceptibles,
+            'porcentaje_infectados': porcentaje,
+            'lotes': len(self.egg_batches)
+        }
+    
     def apply_mortality(self, mortality_rate: float):
         """
         Aplica mortalidad diaria a los huevos.
@@ -218,12 +287,98 @@ class EggManager:
         Reduce la cantidad de huevos en cada lote según la tasa de mortalidad.
         Elimina lotes que quedan sin huevos.
         
+        TRANSMISIÓN VERTICAL: Mantiene la proporción de huevos infectados
+        al aplicar mortalidad (la infección no afecta supervivencia del huevo).
+        
         Parameters
         ----------
         mortality_rate : float
             Tasa de mortalidad diaria (0.0 a 1.0)
             Ejemplo: 0.03 = 3% de mortalidad por día
         """
+        # AJUSTE POR PRECIPITACIÓN: Sequía aumenta mortalidad por desecación
+        precip_7days = getattr(self.model, 'precipitacion_ultimos_7dias', 50.0)
+        
+        drought_severe = getattr(self.model, 'drought_threshold_7days', 10)
+        drought_moderate = getattr(self.model, 'drought_moderate_7days', 25)
+        flood_threshold = getattr(self.model, 'flood_threshold_7days', 100)
+        
+        if precip_7days < drought_severe:  # Sequía severa
+            mortality_multiplier = 2.5
+        elif precip_7days < drought_moderate:  # Sequía moderada
+            mortality_multiplier = 1.5
+        elif precip_7days > flood_threshold:  # Lluvia excesiva (ahogamiento)
+            mortality_multiplier = 1.3
+        else:  # Normal
+            mortality_multiplier = 1.0
+        
+        adjusted_mortality = min(1.0, mortality_rate * mortality_multiplier)
+        
+        batches_to_remove = []
+        
+        for batch in self.egg_batches:
+            # Calcular muertes (redondeo estocástico)
+            muertes_esperadas = batch.cantidad * adjusted_mortality
+            muertes = int(muertes_esperadas)
+            
+            # Probabilidad de muerte adicional (parte fraccionaria)
+            if self.model.random.random() < (muertes_esperadas - muertes):
+                muertes += 1
+            
+            # Calcular muertes entre infectados (proporcional)
+            if batch.cantidad > 0:
+                proporcion_infectados = batch.cantidad_infectados / batch.cantidad
+                muertes_infectados = int(muertes * proporcion_infectados)
+                
+                # Redondeo estocástico para infectados
+                muertes_inf_esperadas = muertes * proporcion_infectados
+                if self.model.random.random() < (muertes_inf_esperadas - muertes_infectados):
+                    muertes_infectados += 1
+                
+                batch.cantidad_infectados = max(0, batch.cantidad_infectados - muertes_infectados)
+            
+            batch.cantidad -= muertes
+            
+            # Asegurar consistencia
+            batch.cantidad_infectados = min(batch.cantidad_infectados, batch.cantidad)
+            
+            # Marcar para eliminación si no quedan huevos
+            if batch.cantidad <= 0:
+                batches_to_remove.append(batch)
+        
+        # Eliminar lotes vacíos
+        for batch in batches_to_remove:
+            self.egg_batches.remove(batch)
+    
+    def apply_temperature_mortality(self):
+        """
+        Aplica mortalidad adicional a los huevos según la temperatura.
+        
+        La mortalidad se ajusta según la temperatura:
+        - T < 10°C: 90% de huevos mueren (frío extremo)
+        - T > 40°C: 80% de huevos mueren (calor extremo)
+        - 10°C < T < 15°C o 35°C < T < 40°C: 50% mueren (subóptimo)
+        - 15°C <= T <= 35°C: Mortalidad base normal
+        
+        Se llama en cada paso de simulación después de la mortalidad base.
+        """
+        temperatura = self.model.temperatura_actual
+        
+        # Determinar tasa de mortalidad adicional según temperatura
+        if temperatura < self.model.temp_extreme_cold:
+            # Frío extremo (< 10°C)
+            mortality_rate = self.model.egg_mortality_extreme_cold
+        elif temperatura > self.model.temp_extreme_heat:
+            # Calor extremo (> 40°C)
+            mortality_rate = self.model.egg_mortality_extreme_heat
+        elif temperatura < self.model.temp_suboptimal_cold or temperatura > self.model.temp_suboptimal_heat:
+            # Subóptimo (10-15°C o 35-40°C)
+            mortality_rate = self.model.egg_mortality_suboptimal
+        else:
+            # Temperatura óptima (15-35°C) - sin mortalidad adicional
+            return
+        
+        # Aplicar mortalidad por temperatura
         batches_to_remove = []
         
         for batch in self.egg_batches:
@@ -235,7 +390,22 @@ class EggManager:
             if self.model.random.random() < (muertes_esperadas - muertes):
                 muertes += 1
             
+            # Calcular muertes entre infectados (proporcional)
+            if batch.cantidad > 0:
+                proporcion_infectados = batch.cantidad_infectados / batch.cantidad
+                muertes_infectados = int(muertes * proporcion_infectados)
+                
+                # Redondeo estocástico para infectados
+                muertes_inf_esperadas = muertes * proporcion_infectados
+                if self.model.random.random() < (muertes_inf_esperadas - muertes_infectados):
+                    muertes_infectados += 1
+                
+                batch.cantidad_infectados = max(0, batch.cantidad_infectados - muertes_infectados)
+            
             batch.cantidad -= muertes
+            
+            # Asegurar consistencia
+            batch.cantidad_infectados = min(batch.cantidad_infectados, batch.cantidad)
             
             # Marcar para eliminación si no quedan huevos
             if batch.cantidad <= 0:
@@ -298,31 +468,45 @@ class EggManager:
         """
         Aplica control larvario (LSM) a los lotes de huevos.
         
-        Elimina huevos según la cobertura y efectividad del control.
-        La reducción total es: coverage × effectiveness
+        Simula el tratamiento de sitios de cría:
+        1. Cada lote (sitio) tiene probabilidad 'coverage' de ser tratado.
+        2. Si es tratado, se eliminan huevos con probabilidad 'effectiveness'.
         
         Parameters
         ----------
         coverage : float
             Cobertura espacial del control (0.0 a 1.0)
-            Ejemplo: 0.7 = 70% de sitios tratados
         effectiveness : float
             Efectividad del tratamiento (0.0 a 1.0)
-            Ejemplo: 0.8 = 80% de reducción en sitios tratados
         """
-        reduccion_total = coverage * effectiveness
         batches_to_remove = []
+        huevos_eliminados = 0
         
         for batch in self.egg_batches:
-            # Decidir si este lote es afectado por el control
-            if self.model.random.random() < reduccion_total:
-                # Eliminar lote completo (tratamiento efectivo)
-                batches_to_remove.append(batch)
-            elif self.model.random.random() < coverage:
-                # Lote tratado pero no completamente efectivo
-                # Reducir cantidad según efectividad
-                reduccion = int(batch.cantidad * effectiveness)
-                batch.cantidad -= reduccion
+            # 1. Determinar si el sitio es tratado (cobertura)
+            if self.model.random.random() < coverage:
+                # Sitio tratado: aplicar reducción
+                
+                # Calcular huevos a eliminar (binomial para estocasticidad)
+                # O aproximación determinista con redondeo estocástico
+                muertes_esperadas = batch.cantidad * effectiveness
+                muertes = int(muertes_esperadas)
+                if self.model.random.random() < (muertes_esperadas - muertes):
+                    muertes += 1
+                
+                muertes = min(muertes, batch.cantidad)
+                huevos_eliminados += muertes
+                
+                # Ajustar infectados proporcionalmente
+                if batch.cantidad > 0:
+                    prop_inf = batch.cantidad_infectados / batch.cantidad
+                    muertes_inf = int(muertes * prop_inf)
+                    # Ajuste estocástico simple
+                    if self.model.random.random() < (muertes * prop_inf - muertes_inf):
+                        muertes_inf += 1
+                    batch.cantidad_infectados = max(0, batch.cantidad_infectados - muertes_inf)
+                
+                batch.cantidad -= muertes
                 
                 if batch.cantidad <= 0:
                     batches_to_remove.append(batch)

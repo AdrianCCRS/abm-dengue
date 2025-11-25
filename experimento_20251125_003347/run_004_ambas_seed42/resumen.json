@@ -1,0 +1,14 @@
+{
+  "run_id": 4,
+  "seed": 42,
+  "estrategia": "ambas",
+  "usar_lsm": true,
+  "usar_itn_irs": true,
+  "total_infectados": 0,
+  "total_recuperados": 1,
+  "pico_infectados": 3,
+  "dia_pico": 7,
+  "mosquitos_finales": 27,
+  "mosquitos_infectados_finales": 9,
+  "tasa_ataque": 0.01
+}

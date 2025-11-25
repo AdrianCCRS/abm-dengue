@@ -95,7 +95,7 @@ class DengueModel(Model):
         mosquitos_infectados_iniciales: int = 5,
         usar_lsm: bool = False,
         usar_itn_irs: bool = False,
-        fecha_inicio: datetime = datetime(2024, 1, 1),
+        fecha_inicio: datetime = datetime(2022, 1, 1),
         climate_data_path: Optional[str] = None,
         seed: Optional[int] = None,
         config: Optional[Dict[str, Any]] = None,
@@ -155,6 +155,8 @@ class DengueModel(Model):
         self.dia_simulacion = 0
         self.temperatura_actual = 25.0  # °C (valor inicial)
         self.precipitacion_actual = 0.0  # mm (valor inicial)
+        self.precipitacion_ultimos_7dias = 0.0  # mm acumulados (para efectos de sequía)
+        self.historial_precipitacion = []  # Lista de últimos 7 días
         
         # Cargar datos climáticos desde CSV (OBLIGATORIO)
         if not climate_data_path:
@@ -189,6 +191,7 @@ class DengueModel(Model):
         self.usar_itn_irs = usar_itn_irs
         self.lsm_activo = False
         self.itn_irs_activo = False
+        self.itn_irs_dias_desde_aplicacion = None  # Contador de días desde aplicación ITN/IRS
         
         # Sitios de cría temporales (charcos post-lluvia)
         # Diccionario: {posicion: dias_restantes}
@@ -237,12 +240,23 @@ class DengueModel(Model):
             huevos_por_sitio = num_huevos // len(self.sitios_cria)
             huevos_restantes = num_huevos % len(self.sitios_cria)
             
+            # Calcular proporción de huevos infectados basado en mosquitos infectados iniciales
+            # Asumimos que si hay mosquitos infectados, algunos huevos también lo están
+            proporcion_mosquitos_infectados = self.mosquitos_infectados_iniciales / max(num_mosquitos, 1)
+            proporcion_huevos_infectados = proporcion_mosquitos_infectados * self.vertical_transmission_rate
+            
             for i, sitio in enumerate(self.sitios_cria):
                 cantidad = huevos_por_sitio
                 if i < huevos_restantes:
                     cantidad += 1
                 if cantidad > 0:
-                    self.egg_manager.add_eggs(sitio, cantidad)
+                    # Calcular huevos infectados (redondeo estocástico)
+                    huevos_infectados_esperados = cantidad * proporcion_huevos_infectados
+                    huevos_infectados = int(huevos_infectados_esperados)
+                    if self.random.random() < (huevos_infectados_esperados - huevos_infectados):
+                        huevos_infectados += 1
+                    
+                    self.egg_manager.add_eggs(sitio, cantidad, huevos_infectados)
         
         # DataCollector para métricas
         self.datacollector = DataCollector(
@@ -359,6 +373,8 @@ class DengueModel(Model):
         human_disease = config.get('human_disease', {})
         self.incubation_period = human_disease.get('incubation_period', 5.0)
         self.infectious_period = human_disease.get('infectious_period', 6.0)
+        self.immunity_loss_prob = human_disease.get('immunity_loss_prob', 0.005)  # Pérdida de inmunidad R→S
+        self.immunity_losses_count = 0  # Contador de pérdidas de inmunidad R→S
         
         # Parámetros de enfermedad mosquito (SI)
         mosquito_disease = config.get('mosquito_disease', {})
@@ -372,6 +388,7 @@ class DengueModel(Model):
         self.mosquito_to_human_prob = transmission.get('mosquito_to_human_prob', 0.6)  # α
         self.human_to_mosquito_prob = transmission.get('human_to_mosquito_prob', 0.275)  # β
         self.bite_rate = transmission.get('bite_rate', 0.33)  # Probabilidad de picadura diaria
+        self.vertical_transmission_rate = transmission.get('vertical_transmission_rate', 0.05)  # Transmisión vertical madre→cría
         
         # Parámetros de movilidad humana (probabilidades diarias por tipo)
         mobility = config.get('mobility', {})
@@ -468,13 +485,12 @@ class DengueModel(Model):
         self.itn_irs_duration_days = itn_irs.get('duration_days', 90)
         self.itn_irs_coverage = itn_irs.get('coverage', 0.6)
         self.itn_irs_effectiveness = itn_irs.get('effectiveness', 0.7)
+        self.itn_irs_mortality_factor = itn_irs.get('mortality_factor', 0.2)
         
         # Parámetros de comportamiento humano
         human_behavior = config.get('human_behavior', {})
         self.isolation_probability = human_behavior.get('isolation_probability', 0.7)
         self.infected_mobility_radius = human_behavior.get('infected_mobility_radius', 1)
-        
-        # Nota: Parámetros de serotipos ya cargados antes de crear agentes
         
         # Parámetros de efectos climáticos
         climate_effects = config.get('climate_effects', {})
@@ -489,6 +505,28 @@ class DengueModel(Model):
         self.egg_mortality_extreme_cold = climate_effects.get('egg_mortality_extreme_cold', 0.90)
         self.egg_mortality_extreme_heat = climate_effects.get('egg_mortality_extreme_heat', 0.80)
         self.egg_mortality_suboptimal = climate_effects.get('egg_mortality_suboptimal', 0.50)
+        
+        # Nuevos parámetros climáticos (Mejora de efectos climáticos)
+        self.temperature_optimal_bite = climate_effects.get('temperature_optimal_bite', 28.0)
+        self.temperature_optimal_transmission = climate_effects.get('temperature_optimal_transmission', 26.0)
+        self.temperature_range_tolerance = climate_effects.get('temperature_range_tolerance', 10.0)
+        
+        self.eip_cold_multiplier = climate_effects.get('eip_cold_multiplier', 2.0)
+        self.eip_cool_multiplier = climate_effects.get('eip_cool_multiplier', 1.5)
+        self.eip_warm_multiplier = climate_effects.get('eip_warm_multiplier', 0.7)
+        
+        self.drought_threshold_7days = climate_effects.get('drought_threshold_7days', 10)
+        self.drought_moderate_7days = climate_effects.get('drought_moderate_7days', 25)
+        self.flood_threshold_7days = climate_effects.get('flood_threshold_7days', 100)
+        
+        self.rain_activity_penalty_moderate = climate_effects.get('rain_activity_penalty_moderate', 0.6)
+        self.rain_activity_penalty_heavy = climate_effects.get('rain_activity_penalty_heavy', 0.3)
+        
+        # Parámetros de inserción por lluvia
+        self.rain_insertion_threshold = climate_effects.get('rain_insertion_threshold', 15.0)
+        self.rain_insertion_factor_divisor = climate_effects.get('rain_insertion_factor_divisor', 8.0)
+        self.rain_insertion_multiplier = climate_effects.get('rain_insertion_multiplier', 0.93)
+        self.rain_insertion_limit = climate_effects.get('rain_insertion_limit', 100)
         
         # Validar que las probabilidades de movilidad sumen 1.0 para cada tipo
         self._validar_probabilidades_movilidad()
@@ -539,6 +577,7 @@ class DengueModel(Model):
         # Parámetros de transmisión
         self.mosquito_to_human_prob = 0.6  # α = 0.6
         self.human_to_mosquito_prob = 0.275  # β = 0.275
+        self.vertical_transmission_rate = 0.05  # Transmisión vertical madre→cría (5%)
         
         # Parámetros de movilidad humana (probabilidades diarias por tipo)
         # Estudiantes (Tipo 1)
@@ -658,14 +697,14 @@ class DengueModel(Model):
         if self.egg_mortality_rate > 0:
             self.egg_manager.apply_mortality(self.egg_mortality_rate)
         
-        # 3.2. Aplicar mortalidad por temperatura extrema
+        # 3.2. Aplicar mortalidad de huevos por temperatura
         self.egg_manager.apply_temperature_mortality()
          
         # 4. Procesar mosquitos (modelo metapoblacional - RÁPIDO)
         self.mosquito_pop.step(self)
         
         # 5. Aplicar estrategias de control
-        #self._aplicar_control()
+        self._aplicar_control()
         
         # 6. Activar agentes humanos (solo humanos, no mosquitos)
         # OPTIMIZACIÓN: Solo log cada 10 días para reducir overhead de I/O
@@ -753,11 +792,20 @@ class DengueModel(Model):
             temp, precip = self.climate_loader.get_climate_data(self.fecha_actual)
             self.temperatura_actual = temp
             self.precipitacion_actual = precip
+            
+            # Actualizar historial de precipitación (últimos 7 días)
+            self.historial_precipitacion.append(precip)
+            if len(self.historial_precipitacion) > 7:
+                self.historial_precipitacion.pop(0)  # Eliminar el más antiguo
+            
+            # Calcular acumulado de últimos 7 días
+            self.precipitacion_ultimos_7dias = sum(self.historial_precipitacion)
         except KeyError:
             raise KeyError(
                 f"No hay datos climáticos disponibles para la fecha {self.fecha_actual.date()}. "
                 f"Verifique que la fecha esté dentro del rango del archivo CSV."
             )
+        
     
     def _actualizar_sitios_cria_temporales(self):
         """
@@ -774,6 +822,10 @@ class DengueModel(Model):
         - temp_site_duration_days: días que persiste un charco (7)
         - temp_site_max_sites: límite máximo de charcos simultáneos (100)
         """
+        charcos_antes = len(self.sitios_cria_temporales)
+        charcos_renovados = 0
+        charcos_nuevos = 0
+        
         # 1. Crear nuevos charcos si hay suficiente lluvia
         if self.precipitacion_actual >= self.temp_site_min_rainfall:
             # Calcular número de charcos a crear
@@ -788,7 +840,30 @@ class DengueModel(Model):
                 pos = (self.random.randrange(self.width),
                       self.random.randrange(self.height))
                 # Reiniciar duración si el sitio ya existe (lluvia renueva charco)
+                if pos in self.sitios_cria_temporales:
+                    charcos_renovados += 1
+                else:
+                    charcos_nuevos += 1
                 self.sitios_cria_temporales[pos] = self.temp_site_duration_days
+            
+            # INSERCIÓN DE MOSQUITOS INFECTADOS POR LLUVIA FUERTE
+            # Simula eclosión de huevos latentes infectados o migración
+            if self.precipitacion_actual >= self.rain_insertion_threshold and num_nuevos > 0:
+                # Factor de inserción: más agresivo, umbral más bajo
+                factor_lluvia = (self.precipitacion_actual - self.rain_insertion_threshold) / self.rain_insertion_factor_divisor
+                infectados_a_crear = int(num_nuevos * factor_lluvia * self.rain_insertion_multiplier)
+                infectados_a_crear = max(2, min(infectados_a_crear, self.rain_insertion_limit))  # Mínimo 2, máximo configurado
+                
+                from .mosquito_population import MosquitoState
+                # Distribuir en los nuevos charcos o sitios aleatorios
+                for _ in range(infectados_a_crear):
+                    pos = (self.random.randrange(self.width),
+                          self.random.randrange(self.height))
+                    self.mosquito_pop.add_mosquitos(pos, 1, MosquitoState.INFECTIOUS)
+                
+                print(f"   [LLUVIA] Lluvia fuerte ({self.precipitacion_actual:.1f}mm) -> Insertados {infectados_a_crear} mosquitos infectados en {num_nuevos} charcos nuevos")
+                
+                # print(f"[LLUVIA] Insertados {infectados_a_crear} mosquitos infectados por lluvia fuerte ({self.precipitacion_actual}mm)")
         
         # 2. Decrementar días restantes y eliminar charcos secos
         sitios_a_eliminar = []
@@ -802,6 +877,9 @@ class DengueModel(Model):
         # 3. Eliminar charcos secos
         for pos in sitios_a_eliminar:
             del self.sitios_cria_temporales[pos]
+        
+        charcos_despues = len(self.sitios_cria_temporales)
+        charcos_eliminados = len(sitios_a_eliminar)
     
     def _aplicar_control(self):
         """
@@ -821,9 +899,17 @@ class DengueModel(Model):
         if self.usar_lsm and self.dia_simulacion % self.lsm_frequency_days == 0:
             self._aplicar_lsm()
         
-        # ITN/IRS: Activar según necesidad
+        # ITN/IRS: Gestionar duración de la intervención
         if self.usar_itn_irs:
-            self._aplicar_itn_irs()
+            # Si no se ha aplicado aún, aplicar al inicio
+            if self.itn_irs_dias_desde_aplicacion is None:
+                self._aplicar_itn_irs()
+            elif self.itn_irs_dias_desde_aplicacion >= self.itn_irs_duration_days:
+                # Desactivar ITN/IRS cuando se alcanza o supera la duración
+                self.itn_irs_activo = False
+            else:
+                # Incrementar días desde aplicación
+                self.itn_irs_dias_desde_aplicacion += 1
     
     def _aplicar_lsm(self):
         """
@@ -844,11 +930,14 @@ class DengueModel(Model):
         """
         Aplica protección con redes/insecticidas (ITN/IRS).
         
-        Reduce probabilidad de picadura en 70% para 60% de humanos.
-        NOTA: La reducción se aplica directamente en la interacción mosquito-humano.
+        Reduce probabilidad de picadura y aumenta mortalidad de mosquitos.
+        La protección dura itn_irs_duration_days (por defecto 90 días).
+        
+        NOTA: La reducción se aplica directamente en:
+        - MosquitoPopulationGrid: mortalidad y tasa de picadura
         """
         self.itn_irs_activo = True
-        # La lógica de reducción se implementa en MosquitoAgent.intentar_picar()
+        self.itn_irs_dias_desde_aplicacion = 1  # Inicia en 1 (día de aplicación)
     
     def _inicializar_mapa_celdas(self) -> Dict[Tuple[int, int], 'Celda']:
         """
