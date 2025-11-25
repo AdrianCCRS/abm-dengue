@@ -23,11 +23,38 @@ from pathlib import Path
 from datetime import datetime
 from multiprocessing import Pool, cpu_count
 import pandas as pd
+import numpy as np
 
 # Agregar src al path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from src.model.dengue_model import DengueModel
+
+
+def convert_to_native_types(obj):
+    """
+    Convierte tipos de NumPy/Pandas a tipos nativos de Python para JSON.
+    
+    Args:
+        obj: Objeto a convertir (puede ser dict, list, numpy type, etc.)
+    
+    Returns:
+        Objeto con tipos nativos de Python
+    """
+    if isinstance(obj, dict):
+        return {k: convert_to_native_types(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_to_native_types(v) for v in obj]
+    elif isinstance(obj, (np.integer, np.int64, np.int32)):
+        return int(obj)
+    elif isinstance(obj, (np.floating, np.float64, np.float32)):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif pd.isna(obj):
+        return None
+    else:
+        return obj
 
 
 def ejecutar_simulacion_individual(params):
@@ -135,10 +162,10 @@ def ejecutar_simulacion_individual(params):
         csv_file = run_dir / "datos_completos.csv"
         df.to_csv(csv_file, index=True)
         
-        # 2. Guardar resumen en JSON
+        # 2. Guardar resumen en JSON (convertir tipos NumPy a nativos)
         resumen_file = run_dir / "resumen.json"
         resumen_json = {k: v for k, v in resultados.items() if k != 'carpeta'}
-        resumen_json['dia_pico'] = int(resumen_json['dia_pico'])  # Convertir a int para JSON
+        resumen_json = convert_to_native_types(resumen_json)  # Convertir todos los tipos
         with open(resumen_file, 'w', encoding='utf-8') as f:
             json.dump(resumen_json, f, indent=2, ensure_ascii=False)
         
