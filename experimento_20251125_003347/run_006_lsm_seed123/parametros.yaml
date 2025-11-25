@@ -1,0 +1,127 @@
+config:
+  climate_effects:
+    drought_moderate_7days: 25
+    drought_threshold_7days: 10
+    eip_cold_multiplier: 2.0
+    eip_cool_multiplier: 1.5
+    eip_warm_multiplier: 0.7
+    flood_threshold_7days: 100
+    mosquito_mortality_extreme_multiplier: 2.5
+    mosquito_mortality_suboptimal_multiplier: 1.5
+    rain_activity_penalty_heavy: 0.3
+    rain_activity_penalty_moderate: 0.6
+    rain_insertion_factor_divisor: 8.0
+    rain_insertion_limit: 100
+    rain_insertion_multiplier: 0.93
+    rain_insertion_threshold: 15.0
+    temperature_extreme_cold: 10
+    temperature_extreme_heat: 40
+    temperature_optimal_bite: 28.0
+    temperature_optimal_max: 35
+    temperature_optimal_min: 15
+    temperature_optimal_transmission: 26.0
+    temperature_range_tolerance: 10.0
+    temperature_suboptimal_cold: 15
+    temperature_suboptimal_heat: 35
+  control:
+    itn_irs:
+      coverage: 0.6
+      duration_days: 90
+      effectiveness: 0.7
+      mortality_factor: 0.2
+    lsm:
+      coverage: 0.7
+      effectiveness: 0.8
+      frequency_days: 7
+  environment:
+    cell_types:
+      park_ratio: 0.1
+      water_ratio: 0.05
+    grid_generation:
+      max_placement_failures: 50
+      max_total_attempts: 500
+    mosquito_flight:
+      max_range: 5
+    synthetic_climate:
+      rain_max_mm: 50.0
+      rain_min_mm: 5.0
+      rain_probability: 0.35
+    zone_sizes:
+      park_max: 6
+      park_min: 3
+      water_max: 4
+      water_min: 2
+  human_behavior:
+    infected_mobility_radius: 1
+    isolation_probability: 0.8
+  human_disease:
+    incubation_period: 5.0
+    infectious_period: 8.0
+  mobility:
+    mobile_daily_probabilities:
+      destination: 0.0
+      home: 0.45
+      park: 0.15
+      random: 0.4
+    stationary_daily_probabilities:
+      destination: 0.0
+      home: 0.95
+      park: 0.05
+      random: 0.0
+    student_daily_probabilities:
+      destination: 0.35
+      home: 0.55
+      park: 0.1
+    worker_daily_probabilities:
+      destination: 0.35
+      home: 0.6
+      park: 0.05
+  mosquito_breeding:
+    breeding_site_ratio: 0.15
+    egg_mortality_rate: 0.15
+    eggs_per_female: 25
+    female_ratio: 0.52
+    gonotrophic_cycle_days: 4
+    immature_development_threshold: 8.3
+    immature_thermal_constant: 181.2
+    mating_probability: 0.6
+    rainfall_threshold: 0.0
+    temporary_sites:
+      duration_days: 9
+      max_sites: 120
+      min_rainfall: 5.0
+      sites_per_mm: 0.5
+  mosquito_disease:
+    carrying_capacity_per_cell: 3000
+    incubation_period: 7
+    mortality_rate: 0.075
+    sensory_range: 3
+  population:
+    mobility_distribution:
+      mobile: 0.2
+      stationary: 0.1
+      student: 0.3
+      worker: 0.4
+  simulation:
+    fecha_inicio: '2022-01-01'
+    height: 150
+    infectados_iniciales: 2
+    mosquitos_infectados_iniciales: 3000
+    num_huevos: 2000
+    num_humanos: 10000
+    num_mosquitos: 5000
+    seed: null
+    steps: 364
+    usar_itn_irs: true
+    usar_lsm: false
+    width: 150
+  transmission:
+    bite_rate: 0.25
+    human_to_mosquito_prob: 0.5
+    mosquito_to_human_prob: 0.002
+    vertical_transmission_rate: 0.3
+estrategia: lsm
+run_id: 6
+seed: 123
+usar_itn_irs: false
+usar_lsm: true

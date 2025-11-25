@@ -1,0 +1,14 @@
+{
+  "run_id": 13,
+  "seed": 789,
+  "estrategia": "sin_control",
+  "usar_lsm": false,
+  "usar_itn_irs": false,
+  "total_infectados": 0,
+  "total_recuperados": 14,
+  "pico_infectados": 5,
+  "dia_pico": 143,
+  "mosquitos_finales": 2880815,
+  "mosquitos_infectados_finales": 73,
+  "tasa_ataque": 0.13999999999999999
+}

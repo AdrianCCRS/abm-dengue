@@ -1,0 +1,430 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# Datos reales (SIVIGILA)
+
+Se cargan los datos del sivigila y se hace un análisis respecto a los casos por años que son los datos que nos importan.
+
+```{r}
+packages <- c("tidyverse", "lubridate", "janitor", "scales")
+to_install <- packages[!packages %in% installed.packages()[, "Package"]]
+if (length(to_install) > 0) install.packages(to_install, repos = "https://cloud.r-project.org")
+lapply(packages, library, character.only = TRUE)
+NULL
+```
+
+```{r}
+# ==========================
+# Cargar librerías
+# ==========================
+library(readr)
+library(dplyr)
+library(janitor)
+library(ggplot2)
+
+# ==========================
+# 1. Cargar el archivo CSV
+# ==========================
+ruta_csv <- "13._Dengue,_Dengue_grave_y_mortalidad_por_dengue_municipio_de_Bucaramanga_20251122.csv"
+
+raw_dengue <- read_csv(
+  ruta_csv,
+  locale = locale(encoding = "UTF-8"),
+  show_col_types = FALSE
+)
+
+# ==========================
+# 2. Limpiar nombres de columnas
+# ==========================
+dengue <- raw_dengue %>%
+  clean_names()
+
+# Ver estructura inicial
+glimpse(dengue)
+
+# ==========================
+# 3. Ver columnas únicas importantes
+# ==========================
+# Columnas clave para análisis temporal y clasificación
+unique(dengue$semana)
+unique(dengue$ano)
+unique(dengue$clasfinal)
+
+# ==========================
+# 4. Conteo de casos por semana epidemiológica
+# ==========================
+casos_por_semana <- dengue %>%
+  count(semana, name = "n_casos") %>%
+  arrange(semana)
+
+# Mostrar tabla resumen
+casos_por_semana
+
+# ==========================
+# 5. Resumen general del dataset
+# ==========================
+resumen_general <- dengue %>%
+  summarise(
+    registros = n(),
+    semana_min = min(semana, na.rm = TRUE),
+    semana_max = max(semana, na.rm = TRUE),
+    n_semanas = n_distinct(semana),
+    anios_cubiertos = n_distinct(ano),
+    clasificaciones = n_distinct(clasfinal)
+  )
+
+resumen_general
+
+# ==========================
+# 6. Histograma / Barras de casos por semana
+# ==========================
+ggplot(casos_por_semana, aes(x = semana, y = n_casos)) +
+  geom_col(fill = "#4C9BE8", color = "black", width = 0.8) +
+  labs(
+    title = "Casos de Dengue por Semana Epidemiológica",
+    subtitle = "Distribución de casos a lo largo del periodo de estudio",
+    x = "Semana Epidemiológica",
+    y = "Número de Casos"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(face = "bold", size = 18),
+    plot.subtitle = element_text(size = 12, color = "gray30"),
+    axis.text.x = element_text(angle = 60, hjust = 1),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor = element_blank(),
+    plot.margin = margin(10, 20, 10, 10)
+  )
+
+# ==========================
+# Casos por año
+# ==========================
+casos_por_anio <- dengue %>%
+  count(ano, name = "n_casos") %>%
+  arrange(ano)
+
+casos_por_anio
+
+# ==========================
+# Histograma / barras por año
+# ==========================
+ggplot(casos_por_anio, aes(x = factor(ano), y = n_casos)) +
+  geom_col(fill = "#E89C4C", color = "black", width = 0.7) +
+  labs(
+    title = "Casos de Dengue por Año",
+    x = "Año",
+    y = "Número de Casos"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(face = "bold", size = 18),
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.grid.minor = element_blank()
+  )
+
+
+```
+
+Se muestra en la gráfica de arriba el numero de casos por semanas
+
+```{r}
+
+dengue_only <- dengue %>%
+  filter(str_detect(toupper(clasfinal), "DENGUE"))
+
+# 1) Asegurar que 'ano' y 'semana' estén en el formato correcto (numéricos)
+dengue_only <- dengue_only %>%
+  mutate(
+    ano = as.integer(as.character(ano)),
+    semana = as.integer(parse_number(as.character(semana)))  # parse_number elimina textos raros
+  )
+
+# 2) Conteo por año + semana
+casos_anio_semana <- dengue_only %>%
+  group_by(ano, semana) %>%
+  summarise(n_casos = n(), .groups = "drop") %>%
+  arrange(ano, semana)
+
+# Ver tabla
+print(casos_anio_semana)
+
+ggplot(casos_por_anio, aes(x = factor(ano), y = n_casos)) +
+  geom_col(fill = "#E89C4C", color = "black", width = 0.7) +
+  geom_text(aes(label = n_casos),
+            vjust = -0.5, size = 4) +
+  labs(
+    title = "Casos de Dengue por Año",
+    x = "Año",
+    y = "Número de Casos"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(face = "bold", size = 18),
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.grid.minor = element_blank()
+  )
+```
+
+Y en esta gráfica se puede evidenciar los casos registrados hasta el día de hoy filtrado por años
+
+```{r}
+dir.create("plots_dengue", showWarnings = FALSE)
+
+# Extraer los años disponibles
+anios <- sort(unique(casos_anio_semana$ano))
+
+# Crear y guardar un gráfico por cada año
+for (a in anios) {
+  
+  # Filtrar datos del año
+  df_year <- casos_anio_semana %>% filter(ano == a)
+  
+  # Crear gráfico
+  p <- ggplot(df_year, aes(x = semana, y = n_casos)) +
+    geom_col(width = 0.8, fill = "#4C9BE8", color = "gray20") +
+    labs(
+      title = paste("Casos de Dengue por Semana Epidemiológica — Año", a),
+      x = "Semana Epidemiológica",
+      y = "Número de Casos"
+    ) +
+    scale_x_continuous(breaks = df_year$semana) +
+    theme_minimal(base_size = 14) +
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 1),
+      panel.grid.minor = element_blank()
+    )
+  
+  # Guardar PNG
+  ggsave(
+    filename = paste0("plots_dengue/casos_dengue_", a, ".png"),
+    plot = p,
+    width = 10,
+    height = 6,
+    dpi = 300
+  )
+}
+
+```
+
+```{r}
+# crear carpeta si no existe
+dir.create("plots_dengue", showWarnings = FALSE)
+
+# asegurar orden de años
+anios <- sort(unique(casos_anio_semana$ano))
+
+for (a in anios) {
+  df_year <- casos_anio_semana %>% filter(ano == a)
+
+  # si no hay datos para el año, salta
+  if (nrow(df_year) == 0) next
+
+  # identificar la semana con más casos (para anotar)
+  peak <- df_year %>% filter(n_casos == max(n_casos, na.rm = TRUE)) %>% slice(1)
+
+  p <- ggplot(df_year, aes(x = factor(semana, levels = sort(unique(semana))), y = n_casos)) +
+    geom_col(aes(fill = n_casos), color = "gray30", width = 0.85) +
+    scale_fill_gradient(low = "#cfe9fb", high = "#0b5ea8", name = "Casos") +
+    geom_text(
+      aes(label = n_casos),
+      vjust = -0.5,
+      size = 3,
+      check_overlap = TRUE
+    ) +
+    # anotar la semana pico
+    geom_label(
+      data = peak,
+      aes(x = as.character(semana), y = n_casos, label = paste0("Máx: ", n_casos, "\nsem ", semana)),
+      nudge_y = max(df_year$n_casos, na.rm = TRUE) * 0.08,
+      size = 3.2,
+      fill = "white",
+      label.size = 0.25
+    ) +
+    labs(
+      title = paste("Casos de Dengue por Semana Epidemiológica — Año", a),
+      subtitle = "Cada barra muestra el número de casos por semana (etiqueta: n casos)",
+      x = "Semana epidemiológica",
+      y = "Número de casos",
+      caption = "Fuente: SIVIGILA (dataset local)"
+    ) +
+    theme_minimal(base_size = 14) +
+    theme(
+      plot.title = element_text(face = "bold", size = 16),
+      plot.subtitle = element_text(size = 11, color = "gray30"),
+      axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 8),
+      axis.text.y = element_text(size = 9),
+      panel.grid.minor = element_blank(),
+      legend.position = "right",
+      plot.margin = margin(10, 10, 10, 10)
+    ) +
+    coord_cartesian(ylim = c(0, max(df_year$n_casos, na.rm = TRUE) * 1.18)) # espacio para etiquetas
+
+  # mostrar
+  print(p)
+
+  # guardar PNG
+  ggsave(
+    filename = paste0("plots_dengue/casos_dengue_", a, ".png"),
+    plot = p,
+    width = 12,
+    height = 7,
+    dpi = 300
+  )
+}
+```
+
+```{r}
+df_2022 <- casos_anio_semana %>%
+  mutate(
+    ano = as.integer(ano),
+    semana = as.integer(semana)
+  ) %>%
+  filter(ano == 2022) %>%
+  # completar semanas 1:53 con 0 si faltan
+  complete(semana = 1:53, fill = list(n_casos = 0)) %>%
+  arrange(semana) %>%
+  mutate(ano = 2022)
+
+# --- si no hay datos en todo 2022, esto seguirá creando 53 semanas con 0
+# --- identificar pico y top5 para etiquetas
+peak <- df_2022 %>% filter(n_casos == max(n_casos, na.rm = TRUE)) %>% slice(1)
+top5 <- df_2022 %>% arrange(desc(n_casos)) %>% slice_head(n = 5) %>% filter(n_casos > 0)
+
+# --- gráfico mejorado para 2022
+p2022 <- ggplot(df_2022, aes(x = factor(semana, levels = as.character(1:53)), y = n_casos)) +
+  geom_col(aes(fill = n_casos), color = "gray40", width = 0.85) +
+  scale_fill_gradient(low = "#e6f2fb", high = "#08589e", name = "Casos") +
+  # etiquetas solo para top5 (evita amontonamiento)
+  geom_text(
+    data = top5,
+    aes(label = n_casos),
+    vjust = -0.5,
+    size = 3.4,
+    color = "black"
+  ) +
+  # anotar semana pico (si existen casos)
+  { if (nrow(peak) && peak$n_casos > 0) geom_label(
+      data = peak,
+      aes(x = as.character(semana), y = n_casos,
+          label = paste0("Pico: ", n_casos, "\nsem ", semana)),
+      nudge_y = max(df_2022$n_casos, na.rm = TRUE) * 0.08,
+      size = 3.6,
+      fill = "white",
+      label.size = 0.25
+    ) else NULL } +
+  labs(
+    title = "Casos de Dengue por Semana Epidemiológica — Año 2022",
+    subtitle = "Semanas 1 a 53 (se muestran 0 cuando no hay casos). Etiquetas: top 5 semanas con más casos",
+    x = "Semana epidemiológica",
+    y = "Número de casos",
+    caption = "Fuente: SIVIGILA (dataset local)"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(face = "bold", size = 16),
+    plot.subtitle = element_text(size = 11, color = "gray30"),
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 8),
+    axis.text.y = element_text(size = 10),
+    panel.grid.minor = element_blank(),
+    legend.position = "right",
+    plot.margin = margin(10, 10, 10, 10)
+  ) +
+  coord_cartesian(ylim = c(0, max(df_2022$n_casos, na.rm = TRUE) * 1.18))
+
+# --- mostrar en consola
+print(p2022)
+
+# --- guardar PNG
+ggsave(
+  filename = "plots_dengue/casos_dengue_2022.png",
+  plot = p2022,
+  width = 12,
+  height = 7,
+  dpi = 300
+)
+```
+
+Ahora por cada año, miramos en cada semana cuantas casos registrados de dengue se evidenciaron en bucaramanga
+
+```{r}
+df_2022 <- casos_anio_semana %>% 
+  filter(ano == 2022) %>% 
+  arrange(semana)
+
+# semana con más casos
+peak_2022 <- df_2022 %>% 
+  filter(n_casos == max(n_casos)) %>% 
+  slice(1)
+
+p2022 <- ggplot(df_2022, aes(x = factor(semana), y = n_casos)) +
+  geom_col(
+    aes(fill = n_casos),
+    width = 0.85,
+    color = "gray30"
+  ) +
+  scale_fill_gradient(
+    low = "#BBD7F5",
+    high = "#0A4F9F",
+    name = "Casos"
+  ) +
+  geom_text(
+    aes(label = n_casos),
+    size = 3,
+    vjust = -0.3,
+    angle = 90,           # 🔥 Texto totalmente vertical
+    hjust = 0.5,
+    check_overlap = TRUE
+  ) +
+  geom_label(
+    data = peak_2022,
+    aes(
+      x = as.character(semana), 
+      y = n_casos,
+      label = paste0("Pico: ", n_casos, "\nSemana ", semana)
+    ),
+    nudge_y = max(df_2022$n_casos) * 0.10,
+    size = 3.2,
+    fill = "white",
+    label.size = 0.3
+  ) +
+  labs(
+    title = "Casos de Dengue por Semana Epidemiológica — Año 2022",
+    subtitle = "Etiquetas verticales para evitar superposición",
+    x = "Semana epidemiológica",
+    y = "Número de casos",
+    caption = "Fuente: SIVIGILA (dataset local)"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(face = "bold", size = 16),
+    axis.text.x = element_text(
+      angle = 90,
+      vjust = 0.5,
+      hjust = 1,
+      size = 8
+    ),
+    axis.text.y = element_text(size = 10),
+    panel.grid.minor = element_blank(),
+    legend.position = "right"
+  ) +
+  coord_cartesian(
+    ylim = c(0, max(df_2022$n_casos) * 1.20) # espacio para etiquetas
+  )
+
+# mostrar
+print(p2022)
+
+# guardar
+ggsave(
+  "casos_dengue_2022.png",
+  plot = p2022,
+  width = 12,
+  height = 7,
+  dpi = 300
+)
+
+```
+
+Se elige el año 2022 debido a que los datos, son datos crudos y se vió que este año es el que tiene menos datos faltantes en el dataset.

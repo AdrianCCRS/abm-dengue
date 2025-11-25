@@ -1,0 +1,70 @@
+
+---
+title: "Análisis de Simulaciones ABM del Dengue"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(ggplot2)
+library(dplyr)
+library(readr)
+library(stringr)
+```
+
+## 📁 Carga de datos
+
+```{r}
+datos <- read_csv("/mnt/data/experimento_20251125/experimento_20251125_003347/datos_consolidados.csv")
+
+# Agregar variable día por simulación
+datos <- datos %>% group_by(run_id) %>% mutate(dia = row_number()) %>% ungroup()
+```
+
+## 📊 Gráficas por simulación
+
+Se grafican las siguientes métricas por cada ejecución (`run_id`) y estrategia:
+
+```{r graficas-por-simulacion, results='hide', include=FALSE}
+metricas <- c("Infectados", "Expuestos", "Recuperados", "Mosquitos_I", "Mosquitos_S", "Mosquitos_Total", "Huevos")
+dir.create("graficas", showWarnings = FALSE)
+
+for (metrica in metricas) {
+  for (id in unique(datos$run_id)) {
+    sub <- datos %>% filter(run_id == id)
+    estrategia <- unique(sub$estrategia)
+    seed <- unique(sub$seed)
+    p <- ggplot(sub, aes(x = dia, y = .data[[metrica]])) +
+      geom_line(color = "#E69F00", size = 1) +
+      labs(title = paste("Evolución de", metrica),
+           subtitle = paste("Estrategia:", estrategia, "| Semilla:", seed),
+           x = "Día", y = metrica) +
+      theme_minimal(base_size = 14)
+    ggsave(paste0("graficas/", str_pad(id, 2, pad = "0"), "_", metrica, "_", estrategia, "_seed", seed, ".png"),
+           plot = p, width = 9, height = 5)
+  }
+}
+```
+
+## 📈 Resumen estadístico por simulación
+
+```{r resumen-estadistico}
+resumen <- datos %>%
+  group_by(run_id, estrategia, seed) %>%
+  summarise(
+    max_infectados = max(Infectados, na.rm=TRUE),
+    duracion_brote = sum(Infectados > 0),
+    pico_dia = dia[which.max(Infectados)],
+    max_mosquitos = max(Mosquitos_Total, na.rm=TRUE),
+    .groups = "drop"
+  )
+
+knitr::kable(resumen)
+write_csv(resumen, "graficas/resumen_estadistico_simulaciones.csv")
+```
+
+## 💡 Conclusiones observadas
+
+- Las estrategias combinadas (`ambas`) reducen significativamente la carga de infección y población de vectores.
+- Las simulaciones sin control presentaron brotes más duraderos y picos más altos.
+- Las variaciones por semilla afectan el tiempo y magnitud del brote, pero el patrón general se mantiene.
