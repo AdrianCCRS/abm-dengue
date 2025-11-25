@@ -2,202 +2,236 @@
 
 **Autores:** Yeison Adrián Cáceres Torres, William Urrutia Torres, Jhon Anderson Vargas Gómez  
 **Institución:** Universidad Industrial de Santander - Simulación Digital F1  
-**Framework:** Mesa 2.3.4 (Python)  
-**Versión del Modelo:** 2.0.0 (Metapoblacional)
+**Framework:** Mesa 2.3.4 (Python)
 
 ---
 
-## 📋 Tabla de Contenidos
+## 📋 Índice
 
-1. [Resumen Ejecutivo](#-resumen-ejecutivo)
-2. [Cambios Principales v2.0](#-cambios-principales-v20)
-3. [Conceptualización del Modelo](#-conceptualización-del-modelo)
-4. [Arquitectura del Sistema](#-arquitectura-del-sistema)
-5. [Modelo Metapoblacional de Mosquitos](#-modelo-metapoblacional-de-mosquitos)
-6. [Agentes del Modelo](#-agentes-del-modelo)
-7. [Entorno de Simulación](#-entorno-de-simulación)
-8. [Efectos Climáticos](#-efectos-climáticos)
-9. [Dinámica Temporal](#-dinámica-temporal)
-10. [Parámetros del Modelo](#-parámetros-del-modelo)
-11. [Interacciones y Flujos de Transmisión](#-interacciones-y-flujos-de-transmisión)
-12. [Implementación Técnica](#-implementación-técnica)
-13. [Instalación y Uso](#-instalación-y-uso)
-14. [Documentación Adicional](#-documentación-adicional)
-15. [Referencias](#-referencias)
+1. [Descripción General](#-descripción-general)
+2. [Características Principales](#-características-principales)
+3. [Estructura del Proyecto](#-estructura-del-proyecto)
+4. [Instalación](#-instalación)
+5. [Uso](#-uso)
+6. [Arquitectura del Modelo](#-arquitectura-del-modelo)
+7. [Documentación Adicional](#-documentación-adicional)
 
 ---
 
-## 🎯 Resumen Ejecutivo
+## 🎯 Descripción General
 
-Este modelo basado en agentes (Agent-Based Model, ABM) simula la dinámica de transmisión del dengue en el área urbana de Bucaramanga, Colombia. **Versión 2.0** introduce un enfoque **metapoblacional** para mosquitos, logrando simulaciones 40× más rápidas manteniendo precisión biológica.
+Modelo basado en agentes que simula la dinámica de transmisión del dengue en Bucaramanga, Colombia, utilizando un **enfoque metapoblacional** para representar las poblaciones de mosquitos de manera computacionalmente eficiente.
 
 ### Características Principales
 
-- **Población humana heterogénea** (10,000 agentes) con patrones de movilidad diferenciados (estudiantes, trabajadores, móviles, estacionarios)
-- **Modelo metapoblacional de mosquitos** con poblaciones almacenadas por celda en arrays numpy (S_m, E_m, I_m)
-- **Transmisión vertical** del virus dengue (5% de huevos infectados de hembras infectadas)
-- **Efectos climáticos complejos** que modulan desarrollo, mortalidad, actividad y reproducción vectorial
-- **Lluvia intensa** genera brotes epidémicos mediante inserción de mosquitos infectados
-- **Entorno urbano realista** basado en el POT 2014-2027 (50×50 celdas de ~100m × 100m = 25 km²)
-- **Clima dinámico** desde datos CSV reales (temperatura, precipitación) que afecta criaderos y desarrollo vectorial
-- **Escala temporal diaria** (1 step = 1 día) para simulaciones de 200 días
+- **10,000 agentes humanos** con modelo epidemiológico SEIR y 4 patrones de movilidad
+- **Modelo metapoblacional de mosquitos** (poblaciones por celda en arrays numpy)
+- **Transmisión vertical** del virus (30% de huevos infectados de hembras infectadas)
+- **Datos climáticos reales** (temperatura y precipitación) que afectan desarrollo vectorial
+- **Grid urbano 50×50** (~100m × 100m por celda = 25 km²)
+- **Simulaciones de 364 días** con escala temporal diaria
 
-### Ventajas del Enfoque Metapoblacional
-
-- **Eficiencia**: 40× más rápido que modelo con agentes mosquito individuales
-- **Memoria**: 166× menos consumo de RAM (30 KB vs 5 MB para 100,000 mosquitos)
-- **Precisión**: Mantiene dinámicas biológicas realistas mediante procesos estocásticos (distribuciones binomiales)
-- **Escalabilidad**: Permite simular poblaciones de cientos de miles de mosquitos
 
 ---
 
-## 🆕 Cambios Principales v2.0
+## 🔧 Estructura del Proyecto
 
-### 1. Modelo Metapoblacional de Mosquitos
-
-**Antes (v1.0)**: Cada mosquito era un agente individual  
-**Ahora (v2.0)**: Poblaciones almacenadas por celda en arrays numpy
-
-```python
-# v1.0: 100,000 agentes MosquitoAgent
-for mosquito in mosquitos:
-    mosquito.step()  # 100,000 iteraciones
-
-# v2.0: Grid 50×50 con arrays
-self.S_m = np.zeros((50, 50), dtype=int)  # Mosquitos susceptibles
-self.E_m = np.zeros((50, 50), dtype=int)  # Mosquitos expuestos
-self.I_m = np.zeros((50, 50), dtype=int)  # Mosquitos infectados
-# Solo 2,500 celdas procesadas
 ```
-
-**Beneficio**: 40× más rápido, 166× menos memoria
-
-### 2. Transmisión Vertical del Virus
-
-Hembras infectadas transmiten el virus a sus huevos:
-- **5% de transmisión vertical** (dato calibrado de literatura)
-- Mosquitos nacen ya **infectados** (estado I_m), saltándose fase E_m
-- Simula persistencia viral en poblaciones de mosquitos
-
-```python
-# En reproducción de mosquitos infectados
-huevos_infectados = int(total_huevos * vertical_transmission_rate)
-# Estos huevos eclosionan directamente a I_m, no a E_m
+abm-dengue/
+├── config/                      # Archivos de configuración
+│   ├── default_config.yaml      # Configuración por defecto
+│   └── experiments/             # Configuraciones de experimentos
+├── data/
+│   └── raw/                     # Datos climáticos históricos
+├── src/                         # Código fuente del modelo
+│   ├── agents/                  # Agentes (humanos y mosquitos)
+│   ├── model/                   # Modelo principal y componentes
+│   │   ├── dengue_model.py      # Modelo principal
+│   │   ├── mosquito_population.py  # Grid metapoblacional
+│   │   ├── egg_manager.py       # Gestión de huevos
+│   │   └── celda.py             # Tipos de celdas urbanas
+│   ├── strategies/              # Estrategias de control (futuro)
+│   └── utils/                   # Utilidades (carga de clima)
+├── main.py                      # Script principal de ejecución
+├── run_parallel_experiments.py # Ejecución paralela de experimentos
+└── requirements.txt             # Dependencias Python
 ```
-
-### 3. Efectos Climáticos Complejos
-
-#### Temperatura afecta 7 aspectos:
-1. **Desarrollo de huevos**: Grados-día acumulados (GDD), T_base=8.3°C
-2. **Mortalidad adultos**: 2.5× mayor en extremos (<10°C, >37°C)
-3. **Período de incubación extrínseca (EIP)**: 7-20 días según temperatura
-4. **Actividad de picadura**: Reducida <18°C o >32°C
-5. **Reproducción**: Pausada en temperaturas extremas
-6. **Desarrollo larvario**: Acelerado con calor (7 días a 35°C vs 27 días a 15°C)
-7. **Longevidad**: Vida media 20 días a 25°C, 8 días en extremos
-
-#### Precipitación afecta 4 aspectos:
-1. **Criaderos temporales**: Lluvia >5mm crea charcos que duran 7 días
-2. **Actividad de picadura**: Reducida con lluvia >10mm (mosquitos refugiados)
-3. **Sequía prolongada**: >7 días sin lluvia aumenta mortalidad de larvas
-4. **Lluvia intensa**: >15mm genera brotes mediante eclosión masiva
-
-### 4. Lluvia Intensa y Brotes Epidémicos
-
-**Mecanismo realista de post-storm outbreaks**:
-```python
-if precipitacion >= 15.0:  # Lluvia intensa
-    # Simula eclosión masiva de huevos dormant
-    charcos_nuevos = int(precipitacion / 2.0)
-    factor = (precipitacion - 15.0) / 10.0
-    mosquitos_emergentes = min(int(23.2 * factor), 100)
-    # Insertar directamente en I_m (infectados)
-```
-
-**Justificación biológica**: Huevos de *Aedes* pueden sobrevivir meses en sequía. Lluvia fuerte activa eclosión simultánea, explicando picos de dengue 2-3 semanas post-tormenta observados en Bucaramanga.
-
-### 5. Manager de Huevos (EggManager)
-
-Sistema centralizado para gestionar cohortes de huevos:
-```python
-class EggManager:
-    def __init__(self):
-        self.lotes = []  # Lista de cohortes
-    
-    def add_eggs(self, pos, sanos, infectados, grados=0.0):
-        # Agregar nuevo lote con transmisión vertical
-    
-    def procesar_desarrollo(self, temperatura, grid_urbano):
-        # Desarrollo GDD y eclosión
-        
-    def aplicar_mortalidad(self, temperatura):
-        # Mortalidad diferencial por edad y temperatura
-```
-
-Permite:
-- Tracking independiente de cada cohorte
-- Transmisión vertical precisa
-- Mortalidad diferencial por temperatura
-- Desarrollo sincronizado por grados-día
-
-### 6. Grid Reducido para Eficiencia
-
-**Antes**: 150×150 = 22,500 celdas  
-**Ahora**: 50×50 = 2,500 celdas
-
-- Cada celda ~100m × 100m (1 hectárea)
-- Área total: 25 km² (suficiente para zona urbana Bucaramanga)
-- **10× menos celdas** = simulaciones mucho más rápidas
-- Escala adecuada para capturar dinámicas urbanas
-
-### 7. Población Humana Escalada
-
-- **10,000 agentes humanos** (vs 3,000 en v1.0)
-- Factor de escala **1:60** (cada agente = 60 personas reales)
-- Población representada: ~600,000 habitantes
-- Mejor representación de heterogeneidad poblacional
-
-### 8. Estrategias de Control Deshabilitadas
-
-LSM (Larval Source Management) e ITN/IRS actualmente **desactivados** para enfocarse en validación de dinámica base.
-
-Se reactivarán en v2.1 tras calibración completa del modelo metapoblacional.
 
 ---
 
-## 🧠 Conceptualización del Modelo
+## 🚀 Instalación
 
-### Paradigma de Modelado
+### Requisitos
 
-El modelo se fundamenta en el paradigma de **simulación basada en agentes** (ABM), donde:
+- Python 3.8+
+- pip
 
-1. **Agentes autónomos**: Humanos y mosquitos son entidades independientes con estado interno y comportamiento
-2. **Interacciones locales**: La transmisión ocurre por contacto espacial directo (picaduras)
-3. **Emergencia**: Patrones epidémicos emergen de interacciones individuales, no se programan explícitamente
-4. **Heterogeneidad**: Cada agente puede tener características únicas (ubicación, estado de salud, movilidad)
+### Pasos de instalación
+
+```bash
+# Clonar el repositorio
+git clone https://github.com/AdrianCCRS/abm-dengue.git
+cd abm-dengue
+
+# Crear entorno virtual (recomendado)
+python -m venv venv
+source venv/bin/activate  # En Windows: venv\Scripts\activate
+
+# Instalar dependencias
+pip install -r requirements.txt
+```
+
+### Dependencias principales
+
+- `mesa==2.3.4` - Framework ABM
+- `numpy==1.26.4` - Computación numérica
+- `pandas==2.2.2` - Manejo de datos
+- `matplotlib==3.8.4` - Visualización
+- `PyYAML==6.0.1` - Configuración
+
+---
+
+## 💻 Uso
+
+### Ejecución básica
+
+```bash
+# Ejecutar simulación con configuración por defecto
+python main.py
+
+# Ejecutar con configuración personalizada
+python main.py --config config/mi_config.yaml
+
+# Especificar parámetros por línea de comandos
+python main.py --steps 365 --humanos 10000 --seed 42
+```
+
+### Ejecución de experimentos paralelos
+
+```bash
+# Ejecutar 16 simulaciones en paralelo (4 semillas × 4 condiciones)
+python run_parallel_experiments.py --config config/experiments/example_batch.yaml
+```
+
+### Argumentos disponibles
+
+- `--config`: Ruta al archivo de configuración YAML
+- `--steps`: Número de días a simular (default: 364)
+- `--humanos`: Número de agentes humanos (default: 10000)
+- `--mosquitos`: Población inicial de mosquitos (default: 5000)
+- `--seed`: Semilla para reproducibilidad
+- `--output`: Directorio de salida para resultados
+
+---
+
+## 🏗️ Arquitectura del Modelo
 
 ### Modelo Epidemiológico
 
-#### Humanos: SEIR (Susceptible-Expuesto-Infectado-Recuperado)
+#### Humanos: SEIR
 
 ```
 S → E → I → R
-    ↑
-    α (mosquito infectado pica humano susceptible)
 ```
 
-- **S (Susceptible)**: Puede infectarse al ser picado por mosquito infectado
-- **E (Expuesto)**: Período de incubación de 5 días [8, 9, 10]
-- **I (Infectado)**: Período infeccioso de 6 días, puede transmitir a mosquitos [8, 9, 10]
-- **R (Recuperado)**: Inmunidad permanente (no re-susceptibilidad)
+- **S (Susceptible)**: Puede infectarse por picadura de mosquito infectado
+- **E (Expuesto)**: Período de incubación de 5 días
+- **I (Infectado)**: Período infeccioso de 8 días
+- **R (Recuperado)**: Inmunidad permanente
 
-#### Mosquitos: SI (Susceptible-Infectado)
+#### Mosquitos: SEI (Metapoblacional)
 
 ```
-S → I (permanente)
-    ↑
-    β (mosquito pica humano infectado)
+S_m → E_m → I_m
 ```
+
+Cada celda del grid mantiene contadores de mosquitos por estado:
+- **S_m**: Mosquitos susceptibles (pueden infectarse)
+- **E_m**: Mosquitos expuestos (incubando virus, 7 días)
+- **I_m**: Mosquitos infectados (transmiten virus de por vida)
+
+### Transmisión del Virus
+
+1. **Horizontal (mosquito ↔ humano)**:
+   - Mosquito infectado pica humano susceptible → probabilidad α
+   - Mosquito susceptible pica humano infectado → probabilidad β
+
+2. **Vertical (hembra → huevos)**:
+   - 30% de huevos de hembras infectadas nacen infectados
+   - Permite persistencia viral entre generaciones
+
+### Efectos Climáticos
+
+**Temperatura afecta**:
+- Desarrollo de huevos (grados-día acumulados, umbral 8.3°C)
+- Período de incubación extrínseca (7-20 días)
+- Mortalidad de adultos (aumenta en extremos)
+- Actividad de picadura (óptima 25-30°C)
+
+**Precipitación afecta**:
+- Creación de criaderos temporales (>5mm)
+- Brotes epidémicos por lluvia intensa (>15mm)
+- Mortalidad larvaria por sequía prolongada
+
+### Patrones de Movilidad Humana
+
+- **Estudiantes (25%)**: Casa → Escuela → Parque
+- **Trabajadores (50%)**: Casa → Oficina → (ocasional parque)
+- **Móviles (15%)**: Movimiento aleatorio continuo
+- **Estacionarios (10%)**: Principalmente en casa
+
+---
+
+## 📚 Documentación Adicional
+
+- **[LOGICA_MODELO.md](LOGICA_MODELO.md)**: Descripción detallada de la lógica del modelo
+- **[docs/GUARDADO_INCREMENTAL.md](docs/GUARDADO_INCREMENTAL.md)**: Sistema de guardado de resultados
+- **[config/default_config.yaml](config/default_config.yaml)**: Parámetros configurables con comentarios
+
+### Resultados de Simulación
+
+Los resultados se guardan en el directorio `experimento_YYYYMMDD_HHMMSS/`:
+- `configuracion.yaml`: Parámetros utilizados
+- `datos_consolidados.csv`: Datos agregados de todas las corridas
+- `resumen_experimentos.csv`: Métricas resumen por corrida
+- `run_XXX_*/`: Resultados individuales de cada simulación
+  - `datos_completos.csv`: Series temporales completas
+  - `parametros.yaml`: Parámetros específicos
+  - `resumen.json`: Métricas finales
+
+### Análisis en R
+
+El proyecto incluye scripts de R para análisis estadístico avanzado:
+- `r_analysis/Procesamiento de Datos Simulados.Rmd`: Análisis de resultados de simulaciones
+
+---
+
+## 🔬 Referencias Científicas
+
+1. Jindal, A., & Rao, S. (2017). Agent-based model of dengue transmission. *IIIT Delhi*.
+2. Keeling, M. J., & Rohani, P. (2008). *Modeling infectious diseases in humans and animals*. Princeton University Press.
+3. Tun-Lin, W., Burkot, T. R., & Kay, B. H. (2000). Effects of temperature and larval diet on development rates of *Aedes aegypti*. *Medical and Veterinary Entomology*, 14(1), 31-37.
+4. Scott, T. W., & Morrison, A. C. (2003). Aedes aegypti density and the risk of dengue virus transmission. *Ecological Aspects for Application of Genetically Modified Mosquitoes*, 187-206.
+5. Gunther, J., et al. (2007). Vertical transmission of dengue virus in *Aedes aegypti*. *PLOS Neglected Tropical Diseases*.
+6. Alcaldía de Bucaramanga (2014). Revisión General del Plan de Ordenamiento Territorial (POT) 2014–2027.
+7. Secretaría de Salud y Ambiente de Bucaramanga (2022). Análisis de Situación de Salud – ASIS Bucaramanga 2022.
+
+---
+
+## 📝 Licencia
+
+Este proyecto es parte de un trabajo académico de la Universidad Industrial de Santander.
+
+## 👥 Contacto
+
+Para preguntas o colaboraciones, contactar a los autores a través de la Universidad Industrial de Santander.
+
+---
+
+**Última actualización:** 25 de noviembre de 2025  
+**Versión:** 2.0 (Modelo Metapoblacional)  
+**Repositorio:** [github.com/AdrianCCRS/abm-dengue](https://github.com/AdrianCCRS/abm-dengue)
+
 
 - **S (Susceptible)**: Puede infectarse al picar humano infectado
 - **I (Infectado)**: Infección permanente, transmite virus de por vida
