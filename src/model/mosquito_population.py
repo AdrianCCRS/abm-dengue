@@ -565,6 +565,16 @@ class MosquitoPopulationGrid:
         gonotrophic_cycle = model.gonotrophic_cycle_days
         vertical_transmission_rate = getattr(model, 'vertical_transmission_rate', 0.05)
         
+        # BOOST POR LLUVIA: Condiciones húmedas favorecen transmisión vertical
+        # Lluvia moderada-fuerte aumenta la tasa de transmisión del virus a huevos
+        precipitacion = getattr(model, 'precipitacion_actual', 0.0)
+        if precipitacion >= 10.0:  # Umbral de lluvia moderada (10mm)
+            # Boost lineal: 10mm→0%, 50mm→100% (duplica transmisión)
+            rain_boost = min((precipitacion - 10.0) / 40.0, 1.0)
+            vertical_transmission_rate *= (1.0 + rain_boost)
+            # Cap máximo en 80% para mantener realismo biológico
+            vertical_transmission_rate = min(vertical_transmission_rate, 0.80)
+        
         # Hembras por estado epidemiológico
         # USAR REDONDEO ESTOCÁSTICO en lugar de truncamiento
         # Esto es crítico para poblaciones pequeñas de infectados
