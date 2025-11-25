@@ -265,6 +265,20 @@ class MosquitoPopulationGrid:
         # Limitar mortalidad a 1.0 (100%)
         mortality_rate = min(1.0, mortality_rate)
         
+        # MORTALIDAD POR CONTROL (ITN/IRS)
+        # Si hay insecticidas/redes, aumenta la mortalidad
+        if getattr(model, 'itn_irs_activo', False):
+            coverage = getattr(model, 'itn_irs_coverage', 0.6)
+            effectiveness = getattr(model, 'itn_irs_effectiveness', 0.7)
+            
+            # Mortalidad adicional: probabilidad de entrar a casa tratada y morir
+            # Factor configurable (default 0.2)
+            mortality_factor = getattr(model, 'itn_irs_mortality_factor', 0.2)
+            control_mortality = coverage * effectiveness * mortality_factor
+            
+            # Combinar probabilidades: P(muerte_total) = 1 - (1-P_natural)*(1-P_control)
+            mortality_rate = 1.0 - (1.0 - mortality_rate) * (1.0 - control_mortality)
+        
         # Mortalidad por compartimento (binomial o aproximación normal)
         if self.S_m[x, y] > 0:
             deaths_S = self._safe_binomial(int(self.S_m[x, y]), mortality_rate)
@@ -298,8 +312,20 @@ class MosquitoPopulationGrid:
             return
         
         # Período de incubación extrínseca (días)
-        # Usar parámetro del modelo si existe, sino default 10 días
-        eip = getattr(model, 'mosquito_incubation_period', 10)
+        base_eip = getattr(model, 'mosquito_incubation_period', 10)
+        
+        # AJUSTE POR TEMPERATURA: Virus se replica más rápido en temperaturas altas
+        temp = model.temperatura_actual
+        if temp < 18:
+            eip_multiplier = getattr(model, 'eip_cold_multiplier', 2.0)  # Muy lento
+        elif temp < 22:
+            eip_multiplier = getattr(model, 'eip_cool_multiplier', 1.5)  # Lento
+        elif temp < 26:
+            eip_multiplier = 1.0  # Normal
+        else:
+            eip_multiplier = getattr(model, 'eip_warm_multiplier', 0.7)  # Rápido
+        
+        eip = base_eip * eip_multiplier
         transition_rate = 1.0 / eip
         
         # Mosquitos que completan incubación
@@ -415,8 +441,24 @@ class MosquitoPopulationGrid:
             return
         
         # Parámetros de transmisión
-        alpha = model.mosquito_to_human_prob  # α
-        beta = model.human_to_mosquito_prob   # β
+        base_alpha = model.mosquito_to_human_prob  # α
+        base_beta = model.human_to_mosquito_prob   # β
+        
+        # AJUSTE POR TEMPERATURA: Competencia vectorial varía con temperatura
+        temp = model.temperatura_actual
+        temp_optimal_transmission = getattr(model, 'temperature_optimal_transmission', 26.0)
+        
+        if temp < 18:
+            transmission_factor = 0.5  # Muy baja
+        elif temp < 22:
+            transmission_factor = 0.75  # Baja
+        elif temp < temp_optimal_transmission:
+            transmission_factor = 1.0  # Normal
+        else:
+            transmission_factor = 1.2  # Alta
+        
+        alpha = base_alpha * transmission_factor
+        beta = base_beta * transmission_factor
         
         # 1. Transmisión Mosquito → Humano
         if self.I_m[x, y] > 0:
@@ -459,7 +501,42 @@ class MosquitoPopulationGrid:
             return
 
         # 1. Mosquitos infecciosos que pican hoy
-        bite_rate = getattr(model, "bite_rate", 0.33)
+        base_bite_rate = getattr(model, "bite_rate", 0.33)
+        
+        # AJUSTE POR TEMPERATURA: Mosquitos pican más en temperaturas cálidas
+        # Curva cuadrática centrada en temperatura óptima (28°C para Aedes aegypti)
+        temp = model.temperatura_actual
+        temp_optimal = getattr(model, 'temperature_optimal_bite', 28.0)
+        temp_range = getattr(model, 'temperature_range_tolerance', 10.0)
+        
+        # Factor de temperatura: 1.0 en óptima, menor en extremos
+        temp_diff = (temp - temp_optimal) / temp_range
+        temp_factor = 1.0 - (temp_diff ** 2)
+        temp_factor = max(0.3, min(1.3, temp_factor))  # Rango [0.3, 1.3]
+        
+        bite_rate = base_bite_rate * temp_factor
+        
+        # PENALIZACIÓN POR LLUVIA: Lluvia fuerte reduce actividad de vuelo
+        precip = model.precipitacion_actual
+        if precip >= 20:  # Lluvia fuerte
+            rain_penalty = getattr(model, 'rain_activity_penalty_heavy', 0.3)
+        elif precip >= 10:  # Lluvia moderada
+            rain_penalty = getattr(model, 'rain_activity_penalty_moderate', 0.6)
+        else:
+            rain_penalty = 1.0  # Sin efecto
+        
+        bite_rate *= rain_penalty
+        
+        # REDUCCIÓN POR CONTROL (ITN/IRS)
+        # Redes y rociado reducen la tasa de picadura (barrera/repelencia)
+        if getattr(model, 'itn_irs_activo', False):
+            coverage = getattr(model, 'itn_irs_coverage', 0.6)
+            effectiveness = getattr(model, 'itn_irs_effectiveness', 0.7)
+            
+            # Factor de protección: reducción de picaduras
+            protection_factor = coverage * effectiveness
+            bite_rate *= (1.0 - protection_factor)
+        
         biting_I = self._safe_binomial(I, bite_rate)
         if biting_I == 0:
             return
@@ -515,7 +592,39 @@ class MosquitoPopulationGrid:
             return
 
         # 1. Mosquitos susceptibles que pican hoy
-        bite_rate = getattr(model, "bite_rate", 0.33)
+        base_bite_rate = getattr(model, "bite_rate", 0.33)
+        
+        # AJUSTE POR TEMPERATURA: Mismo ajuste que en M→H
+        temp = model.temperatura_actual
+        temp_optimal = getattr(model, 'temperature_optimal_bite', 28.0)
+        temp_range = getattr(model, 'temperature_range_tolerance', 10.0)
+        
+        temp_diff = (temp - temp_optimal) / temp_range
+        temp_factor = 1.0 - (temp_diff ** 2)
+        temp_factor = max(0.3, min(1.3, temp_factor))
+        
+        bite_rate = base_bite_rate * temp_factor
+        
+        # PENALIZACIÓN POR LLUVIA: Mismo ajuste que en M→H
+        precip = model.precipitacion_actual
+        if precip >= 20:
+            rain_penalty = getattr(model, 'rain_activity_penalty_heavy', 0.3)
+        elif precip >= 10:
+            rain_penalty = getattr(model, 'rain_activity_penalty_moderate', 0.6)
+        else:
+            rain_penalty = 1.0
+        
+        bite_rate *= rain_penalty
+        
+        # REDUCCIÓN POR CONTROL (ITN/IRS)
+        # Mismo efecto barrera que en M→H
+        if getattr(model, 'itn_irs_activo', False):
+            coverage = getattr(model, 'itn_irs_coverage', 0.6)
+            effectiveness = getattr(model, 'itn_irs_effectiveness', 0.7)
+            
+            protection_factor = coverage * effectiveness
+            bite_rate *= (1.0 - protection_factor)
+        
         biting_S = self._safe_binomial(S, bite_rate)
         if biting_S == 0:
             return

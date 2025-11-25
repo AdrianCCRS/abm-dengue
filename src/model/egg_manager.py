@@ -296,11 +296,29 @@ class EggManager:
             Tasa de mortalidad diaria (0.0 a 1.0)
             Ejemplo: 0.03 = 3% de mortalidad por día
         """
+        # AJUSTE POR PRECIPITACIÓN: Sequía aumenta mortalidad por desecación
+        precip_7days = getattr(self.model, 'precipitacion_ultimos_7dias', 50.0)
+        
+        drought_severe = getattr(self.model, 'drought_threshold_7days', 10)
+        drought_moderate = getattr(self.model, 'drought_moderate_7days', 25)
+        flood_threshold = getattr(self.model, 'flood_threshold_7days', 100)
+        
+        if precip_7days < drought_severe:  # Sequía severa
+            mortality_multiplier = 2.5
+        elif precip_7days < drought_moderate:  # Sequía moderada
+            mortality_multiplier = 1.5
+        elif precip_7days > flood_threshold:  # Lluvia excesiva (ahogamiento)
+            mortality_multiplier = 1.3
+        else:  # Normal
+            mortality_multiplier = 1.0
+        
+        adjusted_mortality = min(1.0, mortality_rate * mortality_multiplier)
+        
         batches_to_remove = []
         
         for batch in self.egg_batches:
             # Calcular muertes (redondeo estocástico)
-            muertes_esperadas = batch.cantidad * mortality_rate
+            muertes_esperadas = batch.cantidad * adjusted_mortality
             muertes = int(muertes_esperadas)
             
             # Probabilidad de muerte adicional (parte fraccionaria)
@@ -401,31 +419,45 @@ class EggManager:
         """
         Aplica control larvario (LSM) a los lotes de huevos.
         
-        Elimina huevos según la cobertura y efectividad del control.
-        La reducción total es: coverage × effectiveness
+        Simula el tratamiento de sitios de cría:
+        1. Cada lote (sitio) tiene probabilidad 'coverage' de ser tratado.
+        2. Si es tratado, se eliminan huevos con probabilidad 'effectiveness'.
         
         Parameters
         ----------
         coverage : float
             Cobertura espacial del control (0.0 a 1.0)
-            Ejemplo: 0.7 = 70% de sitios tratados
         effectiveness : float
             Efectividad del tratamiento (0.0 a 1.0)
-            Ejemplo: 0.8 = 80% de reducción en sitios tratados
         """
-        reduccion_total = coverage * effectiveness
         batches_to_remove = []
+        huevos_eliminados = 0
         
         for batch in self.egg_batches:
-            # Decidir si este lote es afectado por el control
-            if self.model.random.random() < reduccion_total:
-                # Eliminar lote completo (tratamiento efectivo)
-                batches_to_remove.append(batch)
-            elif self.model.random.random() < coverage:
-                # Lote tratado pero no completamente efectivo
-                # Reducir cantidad según efectividad
-                reduccion = int(batch.cantidad * effectiveness)
-                batch.cantidad -= reduccion
+            # 1. Determinar si el sitio es tratado (cobertura)
+            if self.model.random.random() < coverage:
+                # Sitio tratado: aplicar reducción
+                
+                # Calcular huevos a eliminar (binomial para estocasticidad)
+                # O aproximación determinista con redondeo estocástico
+                muertes_esperadas = batch.cantidad * effectiveness
+                muertes = int(muertes_esperadas)
+                if self.model.random.random() < (muertes_esperadas - muertes):
+                    muertes += 1
+                
+                muertes = min(muertes, batch.cantidad)
+                huevos_eliminados += muertes
+                
+                # Ajustar infectados proporcionalmente
+                if batch.cantidad > 0:
+                    prop_inf = batch.cantidad_infectados / batch.cantidad
+                    muertes_inf = int(muertes * prop_inf)
+                    # Ajuste estocástico simple
+                    if self.model.random.random() < (muertes * prop_inf - muertes_inf):
+                        muertes_inf += 1
+                    batch.cantidad_infectados = max(0, batch.cantidad_infectados - muertes_inf)
+                
+                batch.cantidad -= muertes
                 
                 if batch.cantidad <= 0:
                     batches_to_remove.append(batch)

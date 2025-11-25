@@ -95,7 +95,7 @@ class DengueModel(Model):
         mosquitos_infectados_iniciales: int = 5,
         usar_lsm: bool = False,
         usar_itn_irs: bool = False,
-        fecha_inicio: datetime = datetime(2024, 1, 1),
+        fecha_inicio: datetime = datetime(2022, 1, 1),
         climate_data_path: Optional[str] = None,
         seed: Optional[int] = None,
         config: Optional[Dict[str, Any]] = None,
@@ -141,6 +141,8 @@ class DengueModel(Model):
         self.dia_simulacion = 0
         self.temperatura_actual = 25.0  # °C (valor inicial)
         self.precipitacion_actual = 0.0  # mm (valor inicial)
+        self.precipitacion_ultimos_7dias = 0.0  # mm acumulados (para efectos de sequía)
+        self.historial_precipitacion = []  # Lista de últimos 7 días
         
         # Cargar datos climáticos desde CSV (OBLIGATORIO)
         if not climate_data_path:
@@ -435,6 +437,7 @@ class DengueModel(Model):
         self.itn_irs_duration_days = itn_irs.get('duration_days', 90)
         self.itn_irs_coverage = itn_irs.get('coverage', 0.6)
         self.itn_irs_effectiveness = itn_irs.get('effectiveness', 0.7)
+        self.itn_irs_mortality_factor = itn_irs.get('mortality_factor', 0.2)
         
         # Parámetros de comportamiento humano
         human_behavior = config.get('human_behavior', {})
@@ -454,6 +457,28 @@ class DengueModel(Model):
         self.egg_mortality_extreme_cold = climate_effects.get('egg_mortality_extreme_cold', 0.90)
         self.egg_mortality_extreme_heat = climate_effects.get('egg_mortality_extreme_heat', 0.80)
         self.egg_mortality_suboptimal = climate_effects.get('egg_mortality_suboptimal', 0.50)
+        
+        # Nuevos parámetros climáticos (Mejora de efectos climáticos)
+        self.temperature_optimal_bite = climate_effects.get('temperature_optimal_bite', 28.0)
+        self.temperature_optimal_transmission = climate_effects.get('temperature_optimal_transmission', 26.0)
+        self.temperature_range_tolerance = climate_effects.get('temperature_range_tolerance', 10.0)
+        
+        self.eip_cold_multiplier = climate_effects.get('eip_cold_multiplier', 2.0)
+        self.eip_cool_multiplier = climate_effects.get('eip_cool_multiplier', 1.5)
+        self.eip_warm_multiplier = climate_effects.get('eip_warm_multiplier', 0.7)
+        
+        self.drought_threshold_7days = climate_effects.get('drought_threshold_7days', 10)
+        self.drought_moderate_7days = climate_effects.get('drought_moderate_7days', 25)
+        self.flood_threshold_7days = climate_effects.get('flood_threshold_7days', 100)
+        
+        self.rain_activity_penalty_moderate = climate_effects.get('rain_activity_penalty_moderate', 0.6)
+        self.rain_activity_penalty_heavy = climate_effects.get('rain_activity_penalty_heavy', 0.3)
+        
+        # Parámetros de inserción por lluvia
+        self.rain_insertion_threshold = climate_effects.get('rain_insertion_threshold', 15.0)
+        self.rain_insertion_factor_divisor = climate_effects.get('rain_insertion_factor_divisor', 8.0)
+        self.rain_insertion_multiplier = climate_effects.get('rain_insertion_multiplier', 0.93)
+        self.rain_insertion_limit = climate_effects.get('rain_insertion_limit', 100)
         
         # Validar que las probabilidades de movilidad sumen 1.0 para cada tipo
         self._validar_probabilidades_movilidad()
@@ -688,11 +713,20 @@ class DengueModel(Model):
             temp, precip = self.climate_loader.get_climate_data(self.fecha_actual)
             self.temperatura_actual = temp
             self.precipitacion_actual = precip
+            
+            # Actualizar historial de precipitación (últimos 7 días)
+            self.historial_precipitacion.append(precip)
+            if len(self.historial_precipitacion) > 7:
+                self.historial_precipitacion.pop(0)  # Eliminar el más antiguo
+            
+            # Calcular acumulado de últimos 7 días
+            self.precipitacion_ultimos_7dias = sum(self.historial_precipitacion)
         except KeyError:
             raise KeyError(
                 f"No hay datos climáticos disponibles para la fecha {self.fecha_actual.date()}. "
                 f"Verifique que la fecha esté dentro del rango del archivo CSV."
             )
+        
     
     def _actualizar_sitios_cria_temporales(self):
         """
@@ -732,6 +766,25 @@ class DengueModel(Model):
                 else:
                     charcos_nuevos += 1
                 self.sitios_cria_temporales[pos] = self.temp_site_duration_days
+            
+            # INSERCIÓN DE MOSQUITOS INFECTADOS POR LLUVIA FUERTE
+            # Simula eclosión de huevos latentes infectados o migración
+            if self.precipitacion_actual >= self.rain_insertion_threshold and num_nuevos > 0:
+                # Factor de inserción: más agresivo, umbral más bajo
+                factor_lluvia = (self.precipitacion_actual - self.rain_insertion_threshold) / self.rain_insertion_factor_divisor
+                infectados_a_crear = int(num_nuevos * factor_lluvia * self.rain_insertion_multiplier)
+                infectados_a_crear = max(2, min(infectados_a_crear, self.rain_insertion_limit))  # Mínimo 2, máximo configurado
+                
+                from .mosquito_population import MosquitoState
+                # Distribuir en los nuevos charcos o sitios aleatorios
+                for _ in range(infectados_a_crear):
+                    pos = (self.random.randrange(self.width),
+                          self.random.randrange(self.height))
+                    self.mosquito_pop.add_mosquitos(pos, 1, MosquitoState.INFECTIOUS)
+                
+                print(f"   [LLUVIA] Lluvia fuerte ({self.precipitacion_actual:.1f}mm) -> Insertados {infectados_a_crear} mosquitos infectados en {num_nuevos} charcos nuevos")
+                
+                # print(f"[LLUVIA] Insertados {infectados_a_crear} mosquitos infectados por lluvia fuerte ({self.precipitacion_actual}mm)")
         
         # 2. Decrementar días restantes y eliminar charcos secos
         sitios_a_eliminar = []

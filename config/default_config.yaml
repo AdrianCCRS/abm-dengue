@@ -4,7 +4,7 @@ simulation:
   steps: 364                    # 1 año completo
   width: 150
   height: 150
-  num_humanos: 5000           # Escala 1:61 (613,000 / 10,000)
+  num_humanos: 10000           # Escala 1:61 (613,000 / 10,000)
   num_mosquitos: 5000          # Población alta de mosquitos
   num_huevos: 2000             # 10% de mosquitos
   infectados_iniciales: 2       # Pocos casos iniciales humanos
@@ -12,6 +12,7 @@ simulation:
   usar_lsm: false
   usar_itn_irs: false
   seed: null
+  fecha_inicio: "2022-01-01"
 
 human_disease:
   incubation_period: 5.0       # Período de incubación (días)
@@ -24,7 +25,7 @@ mosquito_disease:
   carrying_capacity_per_cell: 3000  # Máximo mosquitos por celda
 
 transmission:
-  mosquito_to_human_prob: 0.005  # α - MUY BAJO: Transmisión M→H esporádica
+  mosquito_to_human_prob: 0.002  # α - MUY BAJO: Transmisión M→H esporádica
   human_to_mosquito_prob: 0.50   # β - ALTO: Mantiene reservorio en mosquitos
   bite_rate: 0.25                # ~1 picadura cada 3 días
   vertical_transmission_rate: 0.30  # 18% (máximo científico, Gunther 2007)
@@ -139,3 +140,52 @@ control:
 human_behavior:
   isolation_probability: 0.8
   infected_mobility_radius: 1
+
+climate_effects:
+  # Temperatura - Efectos en picadura y transmisión
+  temperature_optimal_bite: 28.0          # °C óptima para picadura
+  temperature_optimal_transmission: 26.0  # °C óptima para transmisión
+  temperature_range_tolerance: 10.0       # Rango de tolerancia (parábola)
+  
+  # EIP (Incubación) por temperatura
+  eip_cold_multiplier: 2.0      # <18°C (duplica tiempo)
+  eip_cool_multiplier: 1.5      # 18-22°C
+  eip_warm_multiplier: 0.7      # >26°C (reduce tiempo)
+  
+  # Precipitación - Efectos en mortalidad de huevos (Sequía/Inundación)
+  drought_threshold_7days: 10   # mm en 7 días (sequía severa)
+  drought_moderate_7days: 25    # mm en 7 días (sequía moderada)
+  flood_threshold_7days: 100    # mm en 7 días (exceso/lavado)
+  
+  # Precipitación - Efectos en actividad de vuelo
+  rain_activity_penalty_moderate: 0.6  # 10-20mm (reduce 40%)
+  rain_activity_penalty_heavy: 0.3     # >20mm (reduce 70%)
+  
+  # Rangos de temperatura para mortalidad de mosquitos
+  temperature_optimal_min: 15
+  temperature_optimal_max: 35
+  temperature_extreme_cold: 10
+  temperature_extreme_heat: 40
+  temperature_suboptimal_cold: 15
+  temperature_suboptimal_heat: 35
+  
+  # Multiplicadores de mortalidad de mosquitos
+  mosquito_mortality_extreme_multiplier: 2.5
+  mosquito_mortality_suboptimal_multiplier: 1.5
+  
+  # Inserción de mosquitos infectados por lluvia
+  rain_insertion_threshold: 15.0    # mm mínimos para insertar
+  rain_insertion_factor_divisor: 8.0 # Divisor para factor de lluvia
+  rain_insertion_multiplier: 0.93   # Multiplicador de cantidad
+  rain_insertion_limit: 100         # Máximo de mosquitos insertados por día
+
+control:
+  lsm:
+    frequency_days: 7
+    coverage: 0.7
+    effectiveness: 0.8
+  itn_irs:
+    duration_days: 90
+    coverage: 0.6
+    effectiveness: 0.7
+    mortality_factor: 0.2  # Probabilidad de muerte al entrar a casa tratada
