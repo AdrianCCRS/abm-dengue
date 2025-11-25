@@ -18,6 +18,7 @@ Universidad Industrial de Santander
 import sys
 import yaml
 import argparse
+import json
 from pathlib import Path
 from datetime import datetime
 from multiprocessing import Pool, cpu_count
@@ -32,6 +33,7 @@ from src.model.dengue_model import DengueModel
 def ejecutar_simulacion_individual(params):
     """
     Ejecuta una simulación individual con los parámetros dados.
+    Guarda los resultados inmediatamente en su propia carpeta.
     
     Parameters
     ----------
@@ -48,6 +50,7 @@ def ejecutar_simulacion_individual(params):
     usar_itn_irs = params['usar_itn_irs']
     run_id = params['run_id']
     config = params['config']
+    output_dir = Path(params['output_dir'])
     
     # Identificar tipo de estrategia
     if not usar_lsm and not usar_itn_irs:
@@ -59,7 +62,12 @@ def ejecutar_simulacion_individual(params):
     else:
         estrategia = "ambas"
     
+    # Crear carpeta para esta simulación específica
+    run_dir = output_dir / f"run_{run_id:03d}_{estrategia}_seed{seed}"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    
     print(f"[Iniciando] Run {run_id} - Estrategia: {estrategia} - Semilla: {seed}")
+    print(f"            Guardando en: {run_dir}")
     
     # Convertir fecha_inicio a datetime si es string
     fecha_inicio_str = config['simulation'].get('fecha_inicio', '2022-01-01')
@@ -118,10 +126,47 @@ def ejecutar_simulacion_individual(params):
         'mosquitos_finales': df['Mosquitos_Total'].iloc[-1],
         'mosquitos_infectados_finales': df['Mosquitos_I'].iloc[-1],
         'tasa_ataque': (df['Infectados'].iloc[-1] + df['Recuperados'].iloc[-1]) / config['simulation']['num_humanos'] * 100,
-        'dataframe': df
+        'carpeta': str(run_dir)
     }
     
-    print(f"[Completado] Run {run_id} - {estrategia} - Pico: {resultados['pico_infectados']} - Tasa ataque: {resultados['tasa_ataque']:.2f}%")
+    # *** GUARDAR INMEDIATAMENTE LOS RESULTADOS ***
+    try:
+        # 1. Guardar datos completos en CSV
+        csv_file = run_dir / "datos_completos.csv"
+        df.to_csv(csv_file, index=True)
+        
+        # 2. Guardar resumen en JSON
+        resumen_file = run_dir / "resumen.json"
+        resumen_json = {k: v for k, v in resultados.items() if k != 'carpeta'}
+        resumen_json['dia_pico'] = int(resumen_json['dia_pico'])  # Convertir a int para JSON
+        with open(resumen_file, 'w', encoding='utf-8') as f:
+            json.dump(resumen_json, f, indent=2, ensure_ascii=False)
+        
+        # 3. Guardar parámetros de configuración
+        params_file = run_dir / "parametros.yaml"
+        with open(params_file, 'w', encoding='utf-8') as f:
+            yaml.dump({
+                'run_id': run_id,
+                'seed': seed,
+                'estrategia': estrategia,
+                'usar_lsm': usar_lsm,
+                'usar_itn_irs': usar_itn_irs,
+                'config': config
+            }, f, default_flow_style=False, allow_unicode=True)
+        
+        # 4. Marcar como completado
+        completado_file = run_dir / ".completado"
+        completado_file.touch()
+        
+        print(f"[Completado] Run {run_id} - {estrategia} - Pico: {resultados['pico_infectados']} - Tasa ataque: {resultados['tasa_ataque']:.2f}%")
+        print(f"            ✓ Datos guardados en: {run_dir}")
+        
+    except Exception as e:
+        print(f"[ERROR] Run {run_id} - Error al guardar resultados: {e}")
+        # Crear archivo de error
+        error_file = run_dir / ".error"
+        with open(error_file, 'w', encoding='utf-8') as f:
+            f.write(str(e))
     
     return resultados
 
@@ -169,11 +214,15 @@ def main():
     with open(args.config, 'r', encoding='utf-8') as f:
         config = yaml.safe_load(f)
     
-    # Crear directorio de salida
-    output_dir = Path(args.output_dir)
+    # Crear directorio de salida con timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_dir = Path(args.output_dir) / f"experimento_{timestamp}"
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # Guardar timestamp en archivo de referencia
+    timestamp_file = output_dir / "timestamp.txt"
+    with open(timestamp_file, 'w') as f:
+        f.write(timestamp)
     
     # Preparar lista de simulaciones
     simulaciones = []
@@ -195,7 +244,8 @@ def main():
                 'usar_lsm': estrategia['usar_lsm'],
                 'usar_itn_irs': estrategia['usar_itn_irs'],
                 'run_id': run_counter,
-                'config': config
+                'config': config,
+                'output_dir': str(output_dir)  # Pasar directorio de salida
             })
             run_counter += 1
     
@@ -216,63 +266,87 @@ def main():
     print("TODAS LAS SIMULACIONES COMPLETADAS")
     print(f"{'='*70}\n")
     
-    # Consolidar resultados
+    # Consolidar resultados desde las carpetas guardadas
+    print("Consolidando resultados...")
     resultados_summary = []
     dataframes_completos = []
     
+    # Verificar qué simulaciones se completaron exitosamente
+    completadas = 0
+    fallidas = 0
+    
     for resultado in resultados:
-        # Guardar dataframe individual
-        df = resultado.pop('dataframe')
-        df.to_csv(
-            output_dir / f"simulacion_{timestamp}_run{resultado['run_id']}_{resultado['estrategia']}_seed{resultado['seed']}.csv",
-            index=True
-        )
-        dataframes_completos.append(df)
+        # Eliminar carpeta del resultado para el summary
+        carpeta = resultado.pop('carpeta', None)
         
-        # Agregar a resumen
+        # Verificar si se completó
+        if carpeta:
+            run_dir = Path(carpeta)
+            if (run_dir / ".completado").exists():
+                completadas += 1
+                # Leer datos desde archivo guardado
+                df = pd.read_csv(run_dir / "datos_completos.csv", index_col=0)
+                dataframes_completos.append(df)
+            elif (run_dir / ".error").exists():
+                fallidas += 1
+                print(f"⚠ Run {resultado['run_id']} falló - ver {run_dir / '.error'}")
+        
+        # Agregar a resumen (sin importar si falló)
         resultados_summary.append(resultado)
+    
+    print(f"\n✓ Simulaciones completadas: {completadas}/{len(resultados)}")
+    if fallidas > 0:
+        print(f"✗ Simulaciones fallidas: {fallidas}")
     
     # Crear DataFrame resumen
     df_summary = pd.DataFrame(resultados_summary)
     
-    # Guardar resumen
-    summary_file = output_dir / f"resumen_experimentos_{timestamp}.csv"
+    # Guardar resumen consolidado
+    summary_file = output_dir / "resumen_experimentos.csv"
     df_summary.to_csv(summary_file, index=False)
-    print(f"Resumen guardado en: {summary_file}")
+    print(f"\nResumen consolidado guardado en: {summary_file}")
     
-    # Consolidar todos los dataframes
-    df_consolidado = pd.concat(dataframes_completos, ignore_index=True)
-    consolidado_file = output_dir / f"datos_consolidados_{timestamp}.csv"
-    df_consolidado.to_csv(consolidado_file, index=False)
-    print(f"Datos consolidados guardados en: {consolidado_file}")
+    # Consolidar todos los dataframes (solo los que se completaron)
+    if dataframes_completos:
+        df_consolidado = pd.concat(dataframes_completos, ignore_index=True)
+        consolidado_file = output_dir / "datos_consolidados.csv"
+        df_consolidado.to_csv(consolidado_file, index=False)
+        print(f"Datos consolidados guardados en: {consolidado_file}")
+    else:
+        print("⚠ No hay datos para consolidar")
     
-    # Mostrar resumen por estrategia
-    print(f"\n{'='*70}")
-    print("RESUMEN POR ESTRATEGIA")
-    print(f"{'='*70}\n")
-    
-    summary_by_strategy = df_summary.groupby('estrategia').agg({
-        'pico_infectados': ['mean', 'std'],
-        'tasa_ataque': ['mean', 'std'],
-        'mosquitos_finales': ['mean', 'std']
-    }).round(2)
-    
-    print(summary_by_strategy)
-    print()
+    # Mostrar resumen por estrategia (solo si hay datos)
+    if not df_summary.empty and 'estrategia' in df_summary.columns:
+        print(f"\n{'='*70}")
+        print("RESUMEN POR ESTRATEGIA")
+        print(f"{'='*70}\n")
+        
+        summary_by_strategy = df_summary.groupby('estrategia').agg({
+            'pico_infectados': ['mean', 'std'],
+            'tasa_ataque': ['mean', 'std'],
+            'mosquitos_finales': ['mean', 'std']
+        }).round(2)
+        
+        print(summary_by_strategy)
+        print()
     
     # Guardar configuración usada
-    config_file = output_dir / f"configuracion_{timestamp}.yaml"
+    config_file = output_dir / "configuracion.yaml"
     with open(config_file, 'w', encoding='utf-8') as f:
         yaml.dump({
             'config_original': config,
             'seeds': args.seeds,
             'procesos': args.processes,
-            'timestamp': timestamp
+            'timestamp': timestamp,
+            'total_simulaciones': len(resultados),
+            'completadas': completadas,
+            'fallidas': fallidas
         }, f, default_flow_style=False, allow_unicode=True)
     
     print(f"Configuración guardada en: {config_file}")
     print(f"\n{'='*70}")
-    print("EXPERIMENTO COMPLETADO EXITOSAMENTE")
+    print("EXPERIMENTO COMPLETADO")
+    print(f"Resultados en: {output_dir}")
     print(f"{'='*70}\n")
 
 
