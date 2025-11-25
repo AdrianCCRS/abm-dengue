@@ -115,8 +115,8 @@ def ejecutar_simulacion_individual(params):
         'total_recuperados': df['Recuperados'].iloc[-1],
         'pico_infectados': df['Infectados'].max(),
         'dia_pico': df['Infectados'].idxmax(),
-        'mosquitos_finales': df['Mosquitos Adultos'].iloc[-1],
-        'mosquitos_infectados_finales': df['Mosquitos Infectados'].iloc[-1],
+        'mosquitos_finales': df['Mosquitos_Total'].iloc[-1],
+        'mosquitos_infectados_finales': df['Mosquitos_I'].iloc[-1],
         'tasa_ataque': (df['Infectados'].iloc[-1] + df['Recuperados'].iloc[-1]) / config['simulation']['num_humanos'] * 100,
         'dataframe': df
     }
